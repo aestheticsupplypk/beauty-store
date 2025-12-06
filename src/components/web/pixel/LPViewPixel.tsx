@@ -18,13 +18,18 @@ type Props = {
 
 export default function LPViewPixel({ productId, productName, variants, config }: Props) {
   useEffect(() => {
-    if (!config || !config.enabled || !config.pixel_id) return;
-    if (config.events && config.events.view_content === false) return;
+    if (!config || !config.enabled || !config.pixel_id) {
+      return;
+    }
+    if (config.events && config.events.view_content === false) {
+      return;
+    }
     const ok = ensurePixel(config.pixel_id);
     if (!ok) return;
     const ids = variants.map((v) => (config.content_id_source === "variant_id" ? v.id : v.sku)).filter(Boolean);
     const minPrice = variants.reduce((m, v) => Math.min(m, Number(v.price) || Infinity), Infinity);
     const value = Number.isFinite(minPrice) ? minPrice : undefined;
+    track("PageView");
     track("ViewContent", {
       content_ids: ids.slice(0, 20),
       content_type: "product",

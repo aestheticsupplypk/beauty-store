@@ -7,6 +7,8 @@ import Image from 'next/image';
 import ImageGallery, { type MediaItem } from '@/components/web/product/ImageGallery';
 import UTMCapture from '@/components/web/landing/UTMCapture';
 import LPViewPixel from '@/components/web/pixel/LPViewPixel';
+import SocialLinks from '@/components/web/landing/SocialLinks';
+import TrackedVideo from '@/components/web/landing/TrackedVideo';
 
 // Render helper: if the string looks like HTML, inject as HTML. Otherwise, render paragraphs
 // and preserve single line breaks. Urdu is rendered RTL with the Urdu font class.
@@ -69,7 +71,7 @@ async function fetchLpData(slug: string) {
   // 1) Product by slug
   const { data: product } = await supabase
     .from('products')
-    .select('id, name, slug, description_en, description_ur, active, logo_url, daraz_enabled, daraz_url, daraz_trust_line, chat_enabled, chat_facebook_url, chat_instagram_url, special_message')
+    .select('id, name, slug, description_en, description_ur, active, logo_url, daraz_enabled, daraz_url, daraz_trust_line, chat_enabled, chat_facebook_url, chat_instagram_url, special_message, cta_label, cta_size, fb_page_url, instagram_url, whatsapp_url, contact_email, contact_phone, fb_page_enabled, instagram_enabled, whatsapp_enabled, contact_email_enabled, contact_phone_enabled')
     .eq('slug', slug)
     .eq('active', true)
     .maybeSingle();
@@ -214,6 +216,13 @@ async function fetchLpData(slug: string) {
     .eq('product_id', product.id)
     .order('sort', { ascending: true });
 
+  // 8) Promotions for this product
+  const { data: promos } = await supabase
+    .from('product_promotions')
+    .select('id, name, active, type, min_qty, discount_pct, free_qty, start_at, end_at')
+    .eq('product_id', product.id)
+    .order('created_at', { ascending: true });
+
   // 7b) Build accurate color -> thumbnail map using real option mappings
   const colorThumbs: Record<string, string | undefined> = {};
   if (variants && variants.length) {
@@ -221,7 +230,8 @@ async function fetchLpData(slug: string) {
     const byColor: Record<string, any[]> = {};
     for (const v of variants as any[]) {
       const id = v.id as string;
-      const color = colorByVariant[id];
+      // Reuse same color resolution logic as matrix: prefer mapped color, otherwise derive from SKU or 'Default'
+      const color = colorByVariant[id] ?? ((((v as any).sku || '').split('-')[1]) || 'Default');
       if (!color) continue;
       if (!byColor[color]) byColor[color] = [];
       byColor[color].push(v);
@@ -232,6 +242,8 @@ async function fetchLpData(slug: string) {
       colorThumbs[c] = (withThumb?.thumb_url as string | undefined) || undefined;
     }
   }
+
+  const hasColorDimension = Object.keys(colorByVariant).length > 0;
 
   return {
     product,
@@ -245,6 +257,8 @@ async function fetchLpData(slug: string) {
     colorThumbs,
     specs: specs ?? [],
     sections: sections ?? [],
+    promotions: promos || [],
+    hasColorDimension,
     // load per-product meta pixel config
     pixel: (await (async ()=>{
       const { data: px } = await supabase
@@ -258,7 +272,7 @@ async function fetchLpData(slug: string) {
 }
 
 // Lightweight renderer for long-form sections (text/video/image)
-function Section({ item }: { item: { type?: string; title?: string | null; body?: string | null; media_refs?: string[] | null } }) {
+function Section({ item, productId, productName }: { item: { type?: string; title?: string | null; body?: string | null; media_refs?: string[] | null }; productId?: string; productName?: string }) {
   const t = (item?.type || '').toLowerCase();
   const title = item?.title || '';
   const body = item?.body || '';
@@ -272,9 +286,13 @@ function Section({ item }: { item: { type?: string; title?: string | null; body?
         <img src={media[0] as string} alt={title || 'section image'} className="w-full h-auto rounded border" />
       )}
       {t === 'video' && media.length > 0 && (
-        <video controls className="w-full h-auto rounded border">
-          <source src={media[0] as string} />
-        </video>
+        <TrackedVideo
+          src={media[0] as string}
+          className="w-full h-auto rounded border"
+          productId={productId}
+          productName={productName}
+          location="section"
+        />
       )}
     </section>
   );
@@ -286,9 +304,11 @@ export default async function LandingPage({ params }: { params: { slug: string }
     return <div className="p-6">Landing page not found.</div>;
   }
 
-  const { product, mediaItems, colors, models, packages, sizes, matrix, specs, sections, colorThumbs, variants, pixel } = data as any;
+  const { product, mediaItems, colors, models, packages, sizes, matrix, specs, sections, colorThumbs, variants, pixel, promotions, hasColorDimension } = data as any;
   const contentIdSource = (pixel && pixel.content_id_source === 'variant_id') ? 'variant_id' : 'sku';
   const variantSkuMap: Record<string, string> = Object.fromEntries(((variants||[]) as any[]).map((v:any)=>[v.id, v.sku]));
+  const ctaLabel = (product as any).cta_label || 'Buy on AFAL';
+  const ctaSize = ((product as any).cta_size as string | null) || 'medium';
 
   // Build Product JSON-LD for SEO
   const site = 'https://afalstore.com';
@@ -353,7 +373,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
         {/* Media Gallery */}
         <section>
           {mediaItems.length > 0 ? (
-            <ImageGallery items={mediaItems} />
+            <ImageGallery items={mediaItems} productId={product.id} productName={product.name} />
           ) : (
             <div className="aspect-[1/1] w-full grid place-items-center border rounded text-sm text-gray-500">No media yet</div>
           )}
@@ -376,6 +396,10 @@ export default async function LandingPage({ params }: { params: { slug: string }
             chatInstagramUrl={((product as any).chat_enabled ? (product as any).chat_instagram_url : null) as string | null}
             contentIdSource={contentIdSource as any}
             variantSkuMap={variantSkuMap}
+            ctaLabel={ctaLabel}
+            ctaSize={ctaSize as any}
+            promotions={promotions as any}
+            hasColorDimension={hasColorDimension}
           />
           <ReviewSummary productId={product.id} />
         </div>
@@ -422,6 +446,24 @@ export default async function LandingPage({ params }: { params: { slug: string }
           )}
         </section>
 
+        {/* Social & Contact links (mobile first) */}
+        <div className="block lg:hidden">
+          <SocialLinks
+            fbPageUrl={(product as any).fb_page_url as string | null}
+            instagramUrl={(product as any).instagram_url as string | null}
+            whatsappUrl={(product as any).whatsapp_url as string | null}
+            contactEmail={(product as any).contact_email as string | null}
+            contactPhone={(product as any).contact_phone as string | null}
+            fbPageEnabled={Boolean((product as any).fb_page_enabled)}
+            instagramEnabled={Boolean((product as any).instagram_enabled)}
+            whatsappEnabled={Boolean((product as any).whatsapp_enabled)}
+            contactEmailEnabled={Boolean((product as any).contact_email_enabled)}
+            contactPhoneEnabled={Boolean((product as any).contact_phone_enabled)}
+            productId={product.id}
+            productName={product.name}
+          />
+        </div>
+
         {/* Specifications (dynamic) */}
         {specs && specs.length > 0 && (
           <section className="space-y-6">
@@ -462,7 +504,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
         {sections && sections.length > 0 && (
           <section className="space-y-8 lg:space-y-10">
             {(sections || []).map((s: any, idx: number) => (
-              <Section key={idx} item={s} />
+              <Section key={idx} item={s} productId={product.id} productName={product.name} />
             ))}
           </section>
         )}
@@ -496,8 +538,24 @@ export default async function LandingPage({ params }: { params: { slug: string }
             darazTrustLine={Boolean((product as any).daraz_trust_line)}
             chatFacebookUrl={((product as any).chat_enabled ? (product as any).chat_facebook_url : null) as string | null}
             chatInstagramUrl={((product as any).chat_enabled ? (product as any).chat_instagram_url : null) as string | null}
+            ctaLabel={ctaLabel}
+            ctaSize={ctaSize as any}
+            promotions={promotions as any}
+            hasColorDimension={hasColorDimension}
           />
           <ReviewSummary productId={product.id} />
+          <SocialLinks
+            fbPageUrl={(product as any).fb_page_url as string | null}
+            instagramUrl={(product as any).instagram_url as string | null}
+            whatsappUrl={(product as any).whatsapp_url as string | null}
+            contactEmail={(product as any).contact_email as string | null}
+            contactPhone={(product as any).contact_phone as string | null}
+            fbPageEnabled={Boolean((product as any).fb_page_enabled)}
+            instagramEnabled={Boolean((product as any).instagram_enabled)}
+            whatsappEnabled={Boolean((product as any).whatsapp_enabled)}
+            contactEmailEnabled={Boolean((product as any).contact_email_enabled)}
+            contactPhoneEnabled={Boolean((product as any).contact_phone_enabled)}
+          />
         </div>
       </aside>
       {/* (sentinel moved above reviews) */}
