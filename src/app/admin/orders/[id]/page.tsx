@@ -7,7 +7,7 @@ async function fetchOrder(id: string) {
   const supabase = getSupabaseServerClient();
   const { data: order, error } = await supabase
     .from('orders')
-    .select('id, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount')
+    .select('id, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount, source, total_amount, grand_total, amount_paid, amount_due')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -20,10 +20,25 @@ async function fetchOrder(id: string) {
     .eq('order_id', id);
   if (linesError) throw linesError;
 
-  const subtotal = (lines ?? []).reduce((sum, it: any) => sum + Number(it.line_total || 0), 0);
+  const source = String((order as any).source || 'online');
   const shipping = Number((order as any).shipping_amount || 0);
-  const total = subtotal + shipping;
-  return { order, items: lines ?? [], total, subtotal, shipping } as const;
+
+  let subtotal: number;
+  let total: number;
+
+  if (source === 'manual') {
+    // For manual orders, use precomputed totals on the order row
+    subtotal = Number((order as any).total_amount || 0);
+    total = Number((order as any).grand_total || subtotal + shipping);
+  } else {
+    subtotal = (lines ?? []).reduce((sum, it: any) => sum + Number(it.line_total || 0), 0);
+    total = subtotal + shipping;
+  }
+
+  const amount_paid = Number((order as any).amount_paid || 0);
+  const amount_due = Number((order as any).amount_due ?? (total - amount_paid));
+
+  return { order, items: lines ?? [], total, subtotal, shipping, amount_paid, amount_due } as const;
 }
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
@@ -41,7 +56,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     );
   }
 
-  const { order, items, total, subtotal, shipping } = result as any;
+  const { order, items, total, subtotal, shipping, amount_paid, amount_due } = result as any;
 
   return (
     <div className="space-y-6">
@@ -110,6 +125,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   <tr>
                     <td className="py-2 pr-4 font-medium" colSpan={3}>Total</td>
                     <td className="py-2 pr-4 font-medium">{Number(total || 0).toLocaleString()} PKR</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4" colSpan={3}>Amount paid</td>
+                    <td className="py-2 pr-4">{Number(amount_paid || 0).toLocaleString()} PKR</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-medium" colSpan={3}>Balance owing</td>
+                    <td className="py-2 pr-4 font-medium">{Number(amount_due || 0).toLocaleString()} PKR</td>
                   </tr>
                 </tfoot>
               </table>

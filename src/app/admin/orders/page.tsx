@@ -75,11 +75,18 @@ export default async function OrdersPage({ searchParams }: { searchParams: Searc
     .from('products')
     .select('id, name')
     .order('created_at', { ascending: false });
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Orders</h1>
-      <div className="border rounded p-4">
+return (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <h1 className="text-2xl font-semibold">Orders </h1>
+      <Link
+        href="/admin/orders/new2"
+        className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white hover:bg-black/90"
+      >
+        New manual order
+      </Link>
+    </div>
+    <div className="border rounded p-4">
         <h2 className="font-medium">Orders Capabilities (This Page)</h2>
         <ul className="list-disc pl-5 text-sm mt-2 space-y-1 text-gray-700">
           <li>View orders with filters and quick search.</li>
