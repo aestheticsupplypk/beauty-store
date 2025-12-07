@@ -160,7 +160,13 @@ export default function HomePresenter({ onAddToCart, startingPrice, colorPrices,
                     aria-label="Next product"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7.5 4L12.5 10L7.5 16" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="M7.5 4L12.5 10L7.5 16"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   </button>
                 )}
