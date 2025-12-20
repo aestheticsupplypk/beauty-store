@@ -48,18 +48,86 @@ export async function POST(req: Request) {
     if (!customer.name || !customer.phone || !customer.address || !customer.city) {
       return NextResponse.json({ error: 'Missing required customer fields' }, { status: 400 });
     }
-    // Delegate atomic creation + reservation to Postgres function `place_order`
+
     const shippingAmount = Number((body?.shipping?.amount as any) || 0);
-    const { data, error } = await supabase.rpc('place_order', {
-      p_customer: customer,
-      p_items: items,
-      p_utm: body?.utm ?? {},
-      p_shipping_amount: shippingAmount,
-    });
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+
+    // Inline implementation of order placement (replacing missing place_order RPC)
+    // 1) Fetch variant pricing
+    const variantIds = Array.from(new Set(items.map((it) => it.variant_id))); 
+    const { data: variantRows, error: variantErr } = await supabase
+      .from('variants')
+      .select('id, sku, price, product_id')
+      .in('id', variantIds);
+    if (variantErr) {
+      return NextResponse.json({ error: variantErr.message }, { status: 400 });
     }
-    const orderId = data as string;
+    const variantMap: Record<string, { id: string; sku?: string | null; price: number; product_id?: string | null }> = {};
+    for (const v of variantRows || []) {
+      const vv = v as any;
+      variantMap[String(vv.id)] = {
+        id: String(vv.id),
+        sku: vv.sku || null,
+        price: Number(vv.price || 0),
+        product_id: vv.product_id || null,
+      };
+    }
+
+    // 2) Build order_lines + compute subtotal
+    const linePayload: Array<{ order_id?: string; variant_id: string; qty: number; unit_price: number; line_total: number }> = [];
+    let itemsSubtotal = 0;
+    for (const it of items) {
+      const v = variantMap[it.variant_id];
+      if (!v) {
+        return NextResponse.json({ error: `Variant not found: ${it.variant_id}` }, { status: 400 });
+      }
+      const qty = Number(it.qty || 0);
+      if (!qty || qty <= 0) continue;
+      const unit = Number(v.price || 0);
+      const lineTotal = unit * qty;
+      itemsSubtotal += lineTotal;
+      linePayload.push({
+        variant_id: it.variant_id,
+        qty,
+        unit_price: unit,
+        line_total: lineTotal,
+      } as any);
+    }
+    if (linePayload.length === 0) {
+      return NextResponse.json({ error: 'No valid line items' }, { status: 400 });
+    }
+
+    const grandTotal = itemsSubtotal + shippingAmount;
+
+    // 3) Insert into orders
+    const { data: orderRow, error: orderErr } = await supabase
+      .from('orders')
+      .insert({
+        source: 'online',
+        status: 'pending',
+        payment_status: 'unpaid',
+        customer_name: customer.name,
+        email: customer.email || null,
+        phone: customer.phone,
+        address: customer.address,
+        city: customer.city,
+        province_code: customer.province_code || null,
+        shipping_amount: shippingAmount,
+        total_amount: itemsSubtotal,
+        grand_total: grandTotal,
+      })
+      .select('id')
+      .maybeSingle();
+    if (orderErr || !orderRow) {
+      return NextResponse.json({ error: orderErr?.message || 'Failed to create order' }, { status: 400 });
+    }
+    const orderId = String((orderRow as any).id);
+
+    // 4) Insert order_lines
+    const linesWithOrderId = linePayload.map((ln) => ({ ...ln, order_id: orderId }));
+    const { error: linesErr } = await supabase.from('order_lines').insert(linesWithOrderId as any[]);
+    if (linesErr) {
+      return NextResponse.json({ error: linesErr.message }, { status: 400 });
+    }
     // Try to send an email notification (non-blocking)
     try {
       const RESEND_API_KEY = process.env.RESEND_API_KEY;

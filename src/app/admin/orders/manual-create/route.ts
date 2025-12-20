@@ -12,6 +12,15 @@ function parsePriceOrZero(v: FormDataEntryValue | null): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+function makePrefix(source: string, length: number): string {
+  const cleaned = (source || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+  if (!cleaned) return '';
+  return cleaned.slice(0, length).padEnd(length, 'X');
+}
+
 export async function POST(req: Request) {
   await requireAdmin();
   const supabase = getSupabaseServerClient();
@@ -33,8 +42,6 @@ export async function POST(req: Request) {
     return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
   }
 
-  // For manual orders, Price is treated as the **line total** for that row.
-  // Qty is informational only (how many pieces that total covers).
   const items: { qty: number; price: number }[] = [];
   for (let i = 0; i < 5; i++) {
     const qty = parseIntOrZero(formData.get(`items[${i}][qty]`));
@@ -47,11 +54,31 @@ export async function POST(req: Request) {
     return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
   }
 
-  // Subtotal is the sum of line totals entered in the form
-  const itemsSubtotal = items.reduce((sum, it) => sum + it.price, 0);
+  // Subtotal is the sum of (qty * pricePerPiece) for each line
+  const itemsSubtotal = items.reduce((sum, it) => sum + it.qty * it.price, 0);
   const grand_total = itemsSubtotal + shipping_amount;
   const amount_paid = Math.min(initial_amount_paid, grand_total);
   const amount_due = grand_total - amount_paid;
+
+  // Generate a short human-friendly order code like FAI-MUL-001
+  let order_code: string | undefined;
+  try {
+    const namePrefix = makePrefix(customer_name, 3) || 'CUS';
+    const cityPrefix = makePrefix(city, 3) || 'CTY';
+    const base = `${namePrefix}-${cityPrefix}`;
+
+    const { count } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .ilike('order_code', `${base}-%`);
+
+    const nextNumber = (count ?? 0) + 1;
+    const suffix = String(nextNumber).padStart(3, '0');
+    order_code = `${base}-${suffix}`;
+  } catch (e) {
+    // If anything goes wrong (e.g. column missing), skip setting order_code
+    console.warn('[manual-order] failed to generate order_code', e);
+  }
 
   const { data: order, error } = await supabase
     .from('orders')
@@ -70,6 +97,8 @@ export async function POST(req: Request) {
       grand_total,
       amount_paid,
       amount_due,
+      // order_code is optional and will be ignored by Supabase if the column doesn't exist yet
+      ...(order_code ? { order_code } : {}),
       notes: notes || null,
     })
     .select('id')
@@ -83,10 +112,9 @@ export async function POST(req: Request) {
   const payload = items.map((it) => ({
     order_id: order.id,
     quantity: it.qty,
-    // Store Price as both unit_price and line_total for manual orders,
-    // since Price represents the total for this line.
+    // Price is per-piece; line_total is qty * pricePerPiece
     unit_price: it.price,
-    line_total: it.price,
+    line_total: it.qty * it.price,
   }));
 
   const { error: itemsError } = await supabase.from('order_items').insert(payload);

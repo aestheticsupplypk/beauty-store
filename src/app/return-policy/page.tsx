@@ -1,5 +1,5 @@
 export default function ReturnPolicyPage() {
-  const email = 'afalhelp@gmail.com';
+  const email = 'aestheticsupplypk@gmail.com';
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Return & Refund Policy</h1>

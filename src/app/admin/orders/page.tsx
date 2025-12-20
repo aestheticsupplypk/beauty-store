@@ -2,18 +2,23 @@ import { requireAdmin } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import Link from 'next/link';
 
-type Search = { q?: string; status?: string; productId?: string };
+type Search = { q?: string; status?: string; productId?: string; payment?: string; source?: string };
 
 async function fetchOrders(search: Search) {
   const supabase = getSupabaseServerClient();
   let query = supabase
     .from('orders')
-    .select('id, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount')
+    .select(
+      'id, order_code, source, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount, grand_total, amount_paid, amount_due'
+    )
     .order('created_at', { ascending: false })
     .limit(50);
 
   if (search.status && search.status !== 'all') {
     query = query.eq('status', search.status);
+  }
+  if (search.source && search.source !== 'all') {
+    query = query.eq('source', search.source);
   }
   if (search.q && search.q.trim()) {
     const q = `%${search.q.trim()}%`;
@@ -45,15 +50,35 @@ async function fetchOrders(search: Search) {
     .select('order_id, line_total')
     .in('order_id', ids);
 
-  const totals: Record<string, number> = {};
+  const totalsFromLines: Record<string, number> = {};
   for (const ln of lines ?? []) {
     const key = String((ln as any).order_id);
-    totals[key] = (totals[key] ?? 0) + Number((ln as any).line_total || 0);
+    totalsFromLines[key] = (totalsFromLines[key] ?? 0) + Number((ln as any).line_total || 0);
   }
-  return (data ?? []).map((o) => ({
-    ...o,
-    total: (totals[String(o.id)] ?? 0) + Number((o as any).shipping_amount || 0),
-  }));
+  let result = (data ?? []).map((o) => {
+    const idKey = String(o.id);
+    const shipping = Number((o as any).shipping_amount || 0);
+    const grandTotal = Number((o as any).grand_total || 0);
+    const totalFromLines = (totalsFromLines[idKey] ?? 0) + shipping;
+    const total = grandTotal > 0 ? grandTotal : totalFromLines;
+    const amountPaid = Number((o as any).amount_paid || 0);
+    const amountDue = Number((o as any).amount_due ?? total - amountPaid);
+    return {
+      ...o,
+      total,
+      amount_paid: amountPaid,
+      amount_due: amountDue,
+    };
+  });
+
+  // Apply payment filter in-memory based on amount_due
+  if (search.payment === 'pending') {
+    result = result.filter((o: any) => Number(o.amount_due || 0) > 0);
+  } else if (search.payment === 'paid') {
+    result = result.filter((o: any) => Number(o.amount_due || 0) <= 0 && Number(o.total || 0) > 0);
+  }
+
+  return result;
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams: Search }) {
@@ -69,6 +94,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Searc
   const currentStatus = searchParams?.status ?? 'all';
   const q = searchParams?.q ?? '';
   const currentProduct = searchParams?.productId ?? 'all';
+  const currentPayment = searchParams?.payment ?? 'all';
+  const currentSource = searchParams?.source ?? 'all';
 
   // Fetch products for the dropdown
   const { data: products } = await supabase
@@ -107,6 +134,22 @@ return (
           </select>
         </div>
         <div>
+          <label className="block text-sm">Source</label>
+          <select name="source" defaultValue={currentSource} className="border rounded px-3 py-2">
+            <option value="all">All</option>
+            <option value="manual">Manual</option>
+            <option value="online">Web / Online</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm">Payment</label>
+          <select name="payment" defaultValue={currentPayment} className="border rounded px-3 py-2">
+            <option value="all">All</option>
+            <option value="pending">Pending payments</option>
+            <option value="paid">Paid in full</option>
+          </select>
+        </div>
+        <div>
           <label className="block text-sm">Product</label>
           <select name="productId" defaultValue={currentProduct} className="border rounded px-3 py-2 min-w-[220px]">
             <option value="all">All products</option>
@@ -136,27 +179,45 @@ return (
               <th className="py-2 pr-4">Email</th>
               <th className="py-2 pr-4">Phone</th>
               <th className="py-2 pr-4">City</th>
+              <th className="py-2 pr-4">Source</th>
               <th className="py-2 pr-4">Status</th>
               <th className="py-2 pr-4">Total</th>
+              <th className="py-2 pr-4">Balance owing</th>
               <th className="py-2 pr-4">Created</th>
             </tr>
           </thead>
           <tbody>
             {orders.map((o: any) => (
               <tr key={o.id} className="border-b hover:bg-gray-50">
-                <td className="py-2 pr-4"><Link className="underline" href={`/admin/orders/${o.id}`}>#{o.id}</Link></td>
+                <td className="py-2 pr-4">
+                  <Link className="underline" href={`/admin/orders/${o.id}`}>
+                    #{o.order_code || String(o.id).slice(0, 8)}
+                  </Link>
+                </td>
                 <td className="py-2 pr-4">{o.customer_name}</td>
                 <td className="py-2 pr-4">{o.email || '-'}</td>
                 <td className="py-2 pr-4">{o.phone}</td>
                 <td className="py-2 pr-4">{o.city} {o.province_code ? `(${o.province_code})` : ''}</td>
+                <td className="py-2 pr-4">
+                  {(() => {
+                    const src = (o as any).source || 'online';
+                    const label = src === 'manual' ? 'Manual' : 'Web';
+                    const cls =
+                      src === 'manual'
+                        ? 'inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700'
+                        : 'inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700';
+                    return <span className={cls}>{label}</span>;
+                  })()}
+                </td>
                 <td className="py-2 pr-4 capitalize">{o.status}</td>
                 <td className="py-2 pr-4">{Number(o.total).toLocaleString()} PKR</td>
+                <td className="py-2 pr-4">{Number((o as any).amount_due || 0).toLocaleString()} PKR</td>
                 <td className="py-2 pr-4">{new Date(o.created_at).toLocaleString()}</td>
               </tr>
             ))}
             {orders.length === 0 && (
               <tr>
-                <td className="py-4 text-gray-500" colSpan={7}>No orders found.</td>
+                <td className="py-4 text-gray-500" colSpan={9}>No orders found.</td>
               </tr>
             )}
           </tbody>
