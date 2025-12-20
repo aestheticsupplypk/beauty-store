@@ -51,6 +51,25 @@ export async function POST(req: Request) {
 
     const shippingAmount = Number((body?.shipping?.amount as any) || 0);
 
+    // Affiliate / referral code handling (optional)
+    const rawRef = String(body?.ref_code || '').trim().toUpperCase();
+    let affiliateId: string | null = null;
+    let affiliateRefCode: string | null = null;
+
+    if (rawRef) {
+      const { data: aff, error: affErr } = await supabase
+        .from('affiliates')
+        .select('id, code, active')
+        .eq('code', rawRef)
+        .maybeSingle();
+      if (affErr) {
+        console.error('[orders/create] affiliate lookup error', affErr.message);
+      } else if (aff && (aff as any).active) {
+        affiliateId = String((aff as any).id);
+        affiliateRefCode = String((aff as any).code || rawRef);
+      }
+    }
+
     // Inline implementation of order placement (replacing missing place_order RPC)
     // 1) Fetch variant pricing
     const variantIds = Array.from(new Set(items.map((it) => it.variant_id))); 
@@ -72,9 +91,50 @@ export async function POST(req: Request) {
       };
     }
 
-    // 2) Build order_lines + compute subtotal
+    // 2) Fetch product-level affiliate settings (if any affiliate code present)
+    const productIdsSet = new Set<string>();
+    for (const v of Object.values(variantMap)) {
+      const pid = v.product_id as string | undefined;
+      if (pid) productIdsSet.add(pid);
+    }
+
+    type ProductAffRow = {
+      id: string;
+      affiliate_enabled: boolean | null;
+      affiliate_discount_type: 'none' | 'percent' | 'fixed' | null;
+      affiliate_discount_value: number | null;
+      affiliate_commission_type: 'percent' | 'fixed' | null;
+      affiliate_commission_value: number | null;
+    };
+
+    const productAffMap: Record<string, ProductAffRow> = {};
+    if (productIdsSet.size > 0) {
+      const { data: productRows, error: prodErr } = await supabase
+        .from('products')
+        .select('id, affiliate_enabled, affiliate_discount_type, affiliate_discount_value, affiliate_commission_type, affiliate_commission_value')
+        .in('id', Array.from(productIdsSet));
+      if (prodErr) {
+        console.error('[orders/create] product affiliate fetch error', prodErr.message);
+      } else {
+        for (const p of productRows || []) {
+          const pp = p as any;
+          productAffMap[String(pp.id)] = {
+            id: String(pp.id),
+            affiliate_enabled: !!pp.affiliate_enabled,
+            affiliate_discount_type: (pp.affiliate_discount_type || 'none') as any,
+            affiliate_discount_value: pp.affiliate_discount_value != null ? Number(pp.affiliate_discount_value) : null,
+            affiliate_commission_type: (pp.affiliate_commission_type || 'percent') as any,
+            affiliate_commission_value: pp.affiliate_commission_value != null ? Number(pp.affiliate_commission_value) : null,
+          };
+        }
+      }
+    }
+
+    // 3) Build order_lines + compute discounted subtotal and total commission
     const linePayload: Array<{ order_id?: string; variant_id: string; qty: number; unit_price: number; line_total: number }> = [];
-    let itemsSubtotal = 0;
+    let itemsSubtotalCustomer = 0;
+    let totalCommission = 0;
+
     for (const it of items) {
       const v = variantMap[it.variant_id];
       if (!v) {
@@ -82,23 +142,58 @@ export async function POST(req: Request) {
       }
       const qty = Number(it.qty || 0);
       if (!qty || qty <= 0) continue;
-      const unit = Number(v.price || 0);
-      const lineTotal = unit * qty;
-      itemsSubtotal += lineTotal;
+
+      const baseUnit = Number(v.price || 0);
+      let discountPerUnit = 0;
+      let commissionPerUnit = 0;
+
+      const pid = (v.product_id || null) as string | null;
+      const settings = pid ? productAffMap[pid] : undefined;
+
+      if (affiliateId && settings && settings.affiliate_enabled) {
+        const dType = (settings.affiliate_discount_type || 'none') as 'none' | 'percent' | 'fixed';
+        const dVal = settings.affiliate_discount_value != null ? Number(settings.affiliate_discount_value) : 0;
+        if (dType === 'percent' && dVal > 0) {
+          discountPerUnit = baseUnit * (dVal / 100);
+        } else if (dType === 'fixed' && dVal > 0) {
+          discountPerUnit = dVal;
+        }
+
+        const cType = (settings.affiliate_commission_type || 'percent') as 'percent' | 'fixed';
+        const cVal = settings.affiliate_commission_value != null ? Number(settings.affiliate_commission_value) : 0;
+        if (cType === 'percent' && cVal > 0) {
+          commissionPerUnit = baseUnit * (cVal / 100);
+        } else if (cType === 'fixed' && cVal > 0) {
+          commissionPerUnit = cVal;
+        }
+      }
+
+      if (discountPerUnit > baseUnit) {
+        discountPerUnit = baseUnit;
+      }
+
+      const effectiveUnit = baseUnit - discountPerUnit;
+      const lineCustomerTotal = effectiveUnit * qty;
+      const lineCommission = commissionPerUnit * qty;
+
+      itemsSubtotalCustomer += lineCustomerTotal;
+      totalCommission += lineCommission;
+
       linePayload.push({
         variant_id: it.variant_id,
         qty,
-        unit_price: unit,
-        line_total: lineTotal,
+        unit_price: effectiveUnit,
+        line_total: lineCustomerTotal,
       } as any);
     }
+
     if (linePayload.length === 0) {
       return NextResponse.json({ error: 'No valid line items' }, { status: 400 });
     }
 
-    const grandTotal = itemsSubtotal + shippingAmount;
+    const grandTotal = itemsSubtotalCustomer + shippingAmount;
 
-    // 3) Insert into orders
+    // 4) Insert into orders
     const { data: orderRow, error: orderErr } = await supabase
       .from('orders')
       .insert({
@@ -112,8 +207,11 @@ export async function POST(req: Request) {
         city: customer.city,
         province_code: customer.province_code || null,
         shipping_amount: shippingAmount,
-        total_amount: itemsSubtotal,
+        total_amount: itemsSubtotalCustomer,
         grand_total: grandTotal,
+        affiliate_id: affiliateId,
+        affiliate_ref_code: affiliateId ? affiliateRefCode : null,
+        affiliate_commission_amount: affiliateId ? totalCommission : 0,
       })
       .select('id')
       .maybeSingle();
@@ -122,12 +220,13 @@ export async function POST(req: Request) {
     }
     const orderId = String((orderRow as any).id);
 
-    // 4) Insert order_lines
+    // 5) Insert order_lines
     const linesWithOrderId = linePayload.map((ln) => ({ ...ln, order_id: orderId }));
     const { error: linesErr } = await supabase.from('order_lines').insert(linesWithOrderId as any[]);
     if (linesErr) {
       return NextResponse.json({ error: linesErr.message }, { status: 400 });
     }
+
     // Try to send an email notification (non-blocking)
     try {
       const RESEND_API_KEY = process.env.RESEND_API_KEY;

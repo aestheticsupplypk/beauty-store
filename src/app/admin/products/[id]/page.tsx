@@ -37,6 +37,11 @@ type Product = {
   whatsapp_enabled?: boolean | null;
   contact_email_enabled?: boolean | null;
   contact_phone_enabled?: boolean | null;
+  affiliate_enabled?: boolean | null;
+  affiliate_discount_type?: 'none' | 'percent' | 'fixed' | null;
+  affiliate_discount_value?: number | null;
+  affiliate_commission_type?: 'percent' | 'fixed' | null;
+  affiliate_commission_value?: number | null;
 };
 
 type Media = {
@@ -244,6 +249,12 @@ export default function EditProductPage() {
   const [darazTrustLine, setDarazTrustLine] = useState<boolean>(false);
   const [ctaLabel, setCtaLabel] = useState<string>('');
   const [ctaSize, setCtaSize] = useState<'small' | 'medium' | 'large'>('medium');
+  // Affiliate / referral settings
+  const [affiliateEnabled, setAffiliateEnabled] = useState<boolean>(false);
+  const [affiliateDiscountType, setAffiliateDiscountType] = useState<'none' | 'percent' | 'fixed'>('none');
+  const [affiliateDiscountValue, setAffiliateDiscountValue] = useState<string>('');
+  const [affiliateCommissionType, setAffiliateCommissionType] = useState<'percent' | 'fixed'>('percent');
+  const [affiliateCommissionValue, setAffiliateCommissionValue] = useState<string>('');
   // Social media & contact state
   const [fbPageUrl, setFbPageUrl] = useState<string>('');
   const [instagramUrl, setInstagramUrl] = useState<string>('');
@@ -256,7 +267,7 @@ export default function EditProductPage() {
   const [contactEmailEnabled, setContactEmailEnabled] = useState<boolean>(false);
   const [contactPhoneEnabled, setContactPhoneEnabled] = useState<boolean>(false);
   // snapshot of loaded basics
-  const [initialBasics, setInitialBasics] = useState<{ name: string; slug: string; active: boolean; descriptionEn: string; descriptionUr: string; logoUrl: string; darazEnabled: boolean; darazUrl: string; darazTrustLine: boolean; chatEnabled: boolean; chatFacebookUrl: string; chatInstagramUrl: string; specialMessage: string; fbPageUrl: string; instagramUrl: string; whatsappUrl: string; contactEmail: string; contactPhone: string; fbPageEnabled: boolean; instagramEnabled: boolean; whatsappEnabled: boolean; contactEmailEnabled: boolean; contactPhoneEnabled: boolean; ctaLabel: string; ctaSize: 'small' | 'medium' | 'large' } | null>(null);
+  const [initialBasics, setInitialBasics] = useState<{ name: string; slug: string; active: boolean; descriptionEn: string; descriptionUr: string; logoUrl: string; darazEnabled: boolean; darazUrl: string; darazTrustLine: boolean; chatEnabled: boolean; chatFacebookUrl: string; chatInstagramUrl: string; specialMessage: string; fbPageUrl: string; instagramUrl: string; whatsappUrl: string; contactEmail: string; contactPhone: string; fbPageEnabled: boolean; instagramEnabled: boolean; whatsappEnabled: boolean; contactEmailEnabled: boolean; contactPhoneEnabled: boolean; ctaLabel: string; ctaSize: 'small' | 'medium' | 'large'; affiliateEnabled: boolean; affiliateDiscountType: 'none' | 'percent' | 'fixed'; affiliateDiscountValue: string; affiliateCommissionType: 'percent' | 'fixed'; affiliateCommissionValue: string } | null>(null);
   // dirty flags for variants and add-variant form
   const [variantsDirtyFlag, setVariantsDirtyFlag] = useState(false);
   const [variantFormChangedFlag, setVariantFormChangedFlag] = useState(false);
@@ -269,7 +280,7 @@ export default function EditProductPage() {
       try {
         const { data: p, error: pErr } = await supabaseBrowser
           .from('products')
-          .select('id, name, slug, active, description_en, description_ur, logo_url, daraz_enabled, daraz_url, daraz_trust_line, chat_enabled, chat_facebook_url, chat_instagram_url, special_message, fb_page_url, instagram_url, whatsapp_url, contact_email, contact_phone, fb_page_enabled, instagram_enabled, whatsapp_enabled, contact_email_enabled, contact_phone_enabled, cta_label, cta_size')
+          .select('id, name, slug, active, description_en, description_ur, logo_url, daraz_enabled, daraz_url, daraz_trust_line, chat_enabled, chat_facebook_url, chat_instagram_url, special_message, fb_page_url, instagram_url, whatsapp_url, contact_email, contact_phone, fb_page_enabled, instagram_enabled, whatsapp_enabled, contact_email_enabled, contact_phone_enabled, cta_label, cta_size, affiliate_enabled, affiliate_discount_type, affiliate_discount_value, affiliate_commission_type, affiliate_commission_value')
           .eq('id', params.id)
           .maybeSingle();
         if (pErr) throw pErr;
@@ -300,6 +311,17 @@ export default function EditProductPage() {
         setContactPhoneEnabled(Boolean((p as any).contact_phone_enabled));
         setCtaLabel((p as any).cta_label || '');
         setCtaSize(((p as any).cta_size as 'small' | 'medium' | 'large') || 'medium');
+        setAffiliateEnabled(Boolean((p as any).affiliate_enabled));
+        const discType = ((p as any).affiliate_discount_type as 'none' | 'percent' | 'fixed' | null) || 'none';
+        setAffiliateDiscountType(discType);
+        setAffiliateDiscountValue(
+          (p as any).affiliate_discount_value != null ? String((p as any).affiliate_discount_value) : ''
+        );
+        const commType = ((p as any).affiliate_commission_type as 'percent' | 'fixed' | null) || 'percent';
+        setAffiliateCommissionType(commType);
+        setAffiliateCommissionValue(
+          (p as any).affiliate_commission_value != null ? String((p as any).affiliate_commission_value) : ''
+        );
         setInitialBasics({
           name: (p as any).name || '',
           slug: (p as any).slug || '',
@@ -326,6 +348,13 @@ export default function EditProductPage() {
           contactPhoneEnabled: Boolean((p as any).contact_phone_enabled),
           ctaLabel: (p as any).cta_label || '',
           ctaSize: (((p as any).cta_size as 'small' | 'medium' | 'large') || 'medium'),
+          affiliateEnabled: Boolean((p as any).affiliate_enabled),
+          affiliateDiscountType: discType,
+          affiliateDiscountValue:
+            (p as any).affiliate_discount_value != null ? String((p as any).affiliate_discount_value) : '',
+          affiliateCommissionType: commType,
+          affiliateCommissionValue:
+            (p as any).affiliate_commission_value != null ? String((p as any).affiliate_commission_value) : '',
         });
 
         const { data: m, error: mErr } = await supabaseBrowser
@@ -490,12 +519,21 @@ export default function EditProductPage() {
           whatsapp_enabled: whatsappEnabled,
           contact_email_enabled: contactEmailEnabled,
           contact_phone_enabled: contactPhoneEnabled,
+          affiliate_enabled: affiliateEnabled,
+          affiliate_discount_type: affiliateEnabled ? affiliateDiscountType : 'none',
+          affiliate_discount_value:
+            affiliateEnabled && affiliateDiscountType !== 'none' && affiliateDiscountValue !== ''
+              ? Number(affiliateDiscountValue)
+              : null,
+          affiliate_commission_type: affiliateEnabled ? affiliateCommissionType : 'percent',
+          affiliate_commission_value:
+            affiliateEnabled && affiliateCommissionValue !== '' ? Number(affiliateCommissionValue) : null,
         })
         .eq('id', params.id);
       if (error) throw error;
       router.refresh();
       // update snapshot after successful save
-      setInitialBasics({ name, slug, active, descriptionEn, descriptionUr, logoUrl, darazEnabled, darazUrl, darazTrustLine, chatEnabled, chatFacebookUrl, chatInstagramUrl, specialMessage, fbPageUrl, instagramUrl, whatsappUrl, contactEmail, contactPhone, fbPageEnabled, instagramEnabled, whatsappEnabled, contactEmailEnabled, contactPhoneEnabled, ctaLabel, ctaSize });
+      setInitialBasics({ name, slug, active, descriptionEn, descriptionUr, logoUrl, darazEnabled, darazUrl, darazTrustLine, chatEnabled, chatFacebookUrl, chatInstagramUrl, specialMessage, fbPageUrl, instagramUrl, whatsappUrl, contactEmail, contactPhone, fbPageEnabled, instagramEnabled, whatsappEnabled, contactEmailEnabled, contactPhoneEnabled, ctaLabel, ctaSize, affiliateEnabled, affiliateDiscountType, affiliateDiscountValue, affiliateCommissionType, affiliateCommissionValue });
     } catch (e: any) {
       setError(e?.message || 'Failed to save product');
     } finally {
@@ -531,9 +569,14 @@ export default function EditProductPage() {
       initialBasics.contactEmailEnabled !== contactEmailEnabled ||
       initialBasics.contactPhoneEnabled !== contactPhoneEnabled ||
       initialBasics.ctaLabel !== ctaLabel ||
-      initialBasics.ctaSize !== ctaSize
+      initialBasics.ctaSize !== ctaSize ||
+      initialBasics.affiliateEnabled !== affiliateEnabled ||
+      initialBasics.affiliateDiscountType !== affiliateDiscountType ||
+      initialBasics.affiliateDiscountValue !== affiliateDiscountValue ||
+      initialBasics.affiliateCommissionType !== affiliateCommissionType ||
+      initialBasics.affiliateCommissionValue !== affiliateCommissionValue
     );
-  }, [initialBasics, name, slug, active, descriptionEn, descriptionUr, logoUrl, darazEnabled, darazUrl, darazTrustLine, chatEnabled, chatFacebookUrl, chatInstagramUrl, specialMessage, fbPageUrl, instagramUrl, whatsappUrl, contactEmail, contactPhone, ctaLabel, ctaSize]);
+  }, [initialBasics, name, slug, active, descriptionEn, descriptionUr, logoUrl, darazEnabled, darazUrl, darazTrustLine, chatEnabled, chatFacebookUrl, chatInstagramUrl, specialMessage, fbPageUrl, instagramUrl, whatsappUrl, contactEmail, contactPhone, ctaLabel, ctaSize, affiliateEnabled, affiliateDiscountType, affiliateDiscountValue, affiliateCommissionType, affiliateCommissionValue]);
 
   // beforeunload guard
   useEffect(() => {
@@ -573,6 +616,11 @@ export default function EditProductPage() {
     setContactPhoneEnabled(initialBasics.contactPhoneEnabled);
     setCtaLabel(initialBasics.ctaLabel);
     setCtaSize(initialBasics.ctaSize);
+    setAffiliateEnabled(initialBasics.affiliateEnabled);
+    setAffiliateDiscountType(initialBasics.affiliateDiscountType);
+    setAffiliateDiscountValue(initialBasics.affiliateDiscountValue);
+    setAffiliateCommissionType(initialBasics.affiliateCommissionType);
+    setAffiliateCommissionValue(initialBasics.affiliateCommissionValue);
     // clear Add Variant form
     if (typeof document !== 'undefined') {
       ['v-sku','v-price','v-color','v-size','v-model','v-package'].forEach((id)=>{
@@ -640,10 +688,51 @@ export default function EditProductPage() {
           whatsapp_enabled: whatsappEnabled,
           contact_email_enabled: contactEmailEnabled,
           contact_phone_enabled: contactPhoneEnabled,
+          affiliate_enabled: affiliateEnabled,
+          affiliate_discount_type: affiliateEnabled ? affiliateDiscountType : 'none',
+          affiliate_discount_value:
+            affiliateEnabled && affiliateDiscountType !== 'none' && affiliateDiscountValue !== ''
+              ? Number(affiliateDiscountValue)
+              : null,
+          affiliate_commission_type: affiliateEnabled ? affiliateCommissionType : 'percent',
+          affiliate_commission_value:
+            affiliateEnabled && affiliateCommissionValue !== '' ? Number(affiliateCommissionValue) : null,
         })
         .eq('id', params.id);
       if (pErr) throw pErr;
-      setInitialBasics({ name, slug, active, descriptionEn, descriptionUr, logoUrl, darazEnabled, darazUrl, darazTrustLine, chatEnabled, chatFacebookUrl, chatInstagramUrl, specialMessage, fbPageUrl, instagramUrl, whatsappUrl, contactEmail, contactPhone, fbPageEnabled, instagramEnabled, whatsappEnabled, contactEmailEnabled, contactPhoneEnabled, ctaLabel, ctaSize });
+      // After successful save, refresh the basics snapshot so dirty banner clears
+      setInitialBasics({
+        name,
+        slug,
+        active,
+        descriptionEn,
+        descriptionUr,
+        logoUrl,
+        darazEnabled,
+        darazUrl,
+        darazTrustLine,
+        chatEnabled,
+        chatFacebookUrl,
+        chatInstagramUrl,
+        specialMessage,
+        fbPageUrl,
+        instagramUrl,
+        whatsappUrl,
+        contactEmail,
+        contactPhone,
+        fbPageEnabled,
+        instagramEnabled,
+        whatsappEnabled,
+        contactEmailEnabled,
+        contactPhoneEnabled,
+        ctaLabel,
+        ctaSize,
+        affiliateEnabled,
+        affiliateDiscountType,
+        affiliateDiscountValue,
+        affiliateCommissionType,
+        affiliateCommissionValue,
+      });
 
       // 2) Add Variant (staged)
       const vf = readVariantForm();
@@ -1511,6 +1600,104 @@ export default function EditProductPage() {
         </div>
         <div>
           <button onClick={saveBasics} disabled={saving} className={`px-4 py-2 rounded text-white ${saving ? 'bg-gray-400' : 'bg-black hover:bg-gray-800'}`}>{saving ? 'Saving…' : 'Save'}</button>
+        </div>
+      </section>
+
+      {/* Affiliate & Discount Settings */}
+      <section className="space-y-4 border rounded p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-medium">Affiliate &amp; Discount Settings</h2>
+          <div className="flex items-center gap-2 text-sm">
+            <input
+              id="aff-enabled"
+              type="checkbox"
+              checked={affiliateEnabled}
+              onChange={(e) => setAffiliateEnabled(e.target.checked)}
+            />
+            <label htmlFor="aff-enabled" className="flex items-center gap-1">
+              Enable referrals for this product
+              <HelpTip>When enabled, valid referral codes can give customers a discount and pay commission to affiliates for this product. All percentages and fixed amounts are based on the listed online price.</HelpTip>
+            </label>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-600 max-w-2xl">
+          Configure how much discount customers get and how much commission affiliates earn when a valid referral code is used for this product. Values apply per unit, based on the listed online price (e.g. 3,500 PKR), before shipping.
+        </p>
+
+        <div className="grid md:grid-cols-2 gap-6 text-sm">
+          {/* Customer discount */}
+          <div className="space-y-2">
+            <h3 className="font-medium flex items-center gap-2">
+              Customer discount
+              <HelpTip>
+                Optional discount applied to the product price when the customer enters a valid referral code. You can set it as a percentage of the listed price or a fixed PKR amount per unit.
+              </HelpTip>
+            </h3>
+            <div className="flex items-center gap-3">
+              <select
+                className="border rounded px-2 py-1 text-sm"
+                value={affiliateDiscountType}
+                onChange={(e) => setAffiliateDiscountType(e.target.value as 'none' | 'percent' | 'fixed')}
+                disabled={!affiliateEnabled}
+              >
+                <option value="none">No discount</option>
+                <option value="percent">Percentage (%)</option>
+                <option value="fixed">Fixed amount (PKR)</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                className="border rounded px-2 py-1 w-32 text-right"
+                placeholder={affiliateDiscountType === 'percent' ? '10' : '350'}
+                value={affiliateDiscountValue}
+                onChange={(e) => setAffiliateDiscountValue(e.target.value)}
+                disabled={!affiliateEnabled || affiliateDiscountType === 'none'}
+              />
+              <span className="text-xs text-gray-600">
+                {affiliateDiscountType === 'percent'
+                  ? '% of listed price'
+                  : affiliateDiscountType === 'fixed'
+                  ? 'PKR per unit'
+                  : ''}
+              </span>
+            </div>
+          </div>
+
+          {/* Affiliate commission */}
+          <div className="space-y-2">
+            <h3 className="font-medium flex items-center gap-2">
+              Affiliate commission
+              <HelpTip>
+                Commission paid to the affiliate per unit sold via their code. Always calculated on the listed online price, not the discounted price.
+              </HelpTip>
+            </h3>
+            <div className="flex items-center gap-3">
+              <select
+                className="border rounded px-2 py-1 text-sm"
+                value={affiliateCommissionType}
+                onChange={(e) => setAffiliateCommissionType(e.target.value as 'percent' | 'fixed')}
+                disabled={!affiliateEnabled}
+              >
+                <option value="percent">Percentage (%)</option>
+                <option value="fixed">Fixed amount (PKR)</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                className="border rounded px-2 py-1 w-32 text-right"
+                placeholder={affiliateCommissionType === 'percent' ? '15' : '500'}
+                value={affiliateCommissionValue}
+                onChange={(e) => setAffiliateCommissionValue(e.target.value)}
+                disabled={!affiliateEnabled}
+              />
+              <span className="text-xs text-gray-600">
+                {affiliateCommissionType === 'percent' ? '% of listed price' : 'PKR per unit'}
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 

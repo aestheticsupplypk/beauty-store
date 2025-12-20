@@ -71,6 +71,7 @@ function CheckoutInner() {
   const [shippingAmount, setShippingAmount] = useState<number | null>(null);
   const [shippingLoading, setShippingLoading] = useState<boolean>(false);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
+  const [productAff, setProductAff] = useState<Record<string, { enabled: boolean; discountType: 'none' | 'percent' | 'fixed'; discountValue: number }>>({});
   // Meta Pixel config (per product)
   const [pixelCfg, setPixelCfg] = useState<null | { enabled: boolean; pixel_id: string | null; content_id_source: 'sku' | 'variant_id'; events: any }>(null);
   const firedInitRef = useRef(false);
@@ -78,6 +79,10 @@ function CheckoutInner() {
   const firedPurchaseRef = useRef(false);
 
   const formRef = useRef<HTMLFormElement>(null);
+
+  const [refCode, setRefCode] = useState<string>("");
+  const [refStatus, setRefStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [refDiscountAmount, setRefDiscountAmount] = useState<number>(0);
 
   // Helper: sync lines to URL
   const replaceUrlWithLines = (newLines: CartItem[]) => {
@@ -174,7 +179,7 @@ function CheckoutInner() {
               .order("sort", { ascending: true }),
             supabaseBrowser
               .from("products")
-              .select("id, logo_url, slug")
+              .select("id, logo_url, slug, affiliate_enabled, affiliate_discount_type, affiliate_discount_value")
               .in("id", productIds),
           ]);
           setProductId(productIds[0] as string);
@@ -197,6 +202,18 @@ function CheckoutInner() {
             if (!productSlug) setProductSlug((p as any).slug || null);
           }
           setLogoByProduct(logoMap);
+
+          // Build affiliate settings map per product for client-side discount preview
+          const affMap: Record<string, { enabled: boolean; discountType: 'none' | 'percent' | 'fixed'; discountValue: number }> = {};
+          for (const p of productsRows || []) {
+            const pid = (p as any).id as string;
+            const enabled = Boolean((p as any).affiliate_enabled);
+            const t = ((p as any).affiliate_discount_type || 'none') as 'none' | 'percent' | 'fixed';
+            const vRaw = (p as any).affiliate_discount_value;
+            const v = vRaw != null ? Number(vRaw) : 0;
+            affMap[pid] = { enabled, discountType: t, discountValue: v };
+          }
+          setProductAff(affMap);
         }
         // Fetch option labels via join
         const { data: links } = await supabaseBrowser
@@ -271,6 +288,16 @@ function CheckoutInner() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemsParam]);
+
+  // Prefill referral / beautician code from URL (?ref=) once
+  useEffect(() => {
+    try {
+      const raw = search.get('ref');
+      if (raw && !refCode) {
+        setRefCode(String(raw).trim());
+      }
+    } catch {}
+  }, [search, refCode]);
 
   // When province changes and city-rates are enabled, fetch cities
   useEffect(() => {
@@ -350,6 +377,31 @@ function CheckoutInner() {
     return { subtotal: fs, discount: best.d, promoLabel: best.label };
   }, [promotions, rawSubtotal, totalQty]);
 
+  // Compute referral discount preview based on current cart and affiliate product settings
+  const recomputeReferralDiscount = (codeValid: boolean) => {
+    if (!codeValid) {
+      setRefDiscountAmount(0);
+      return;
+    }
+    let total = 0;
+    for (const ln of lines) {
+      const v = variants[ln.variant_id];
+      if (!v || !v.product_id) continue;
+      const cfg = productAff[v.product_id];
+      if (!cfg || !cfg.enabled) continue;
+      const P = Number(v.price || 0);
+      let discPerUnit = 0;
+      if (cfg.discountType === 'percent' && cfg.discountValue > 0) {
+        discPerUnit = P * (cfg.discountValue / 100);
+      } else if (cfg.discountType === 'fixed' && cfg.discountValue > 0) {
+        discPerUnit = cfg.discountValue;
+      }
+      if (discPerUnit > P) discPerUnit = P;
+      total += discPerUnit * ln.qty;
+    }
+    setRefDiscountAmount(total);
+  };
+
   // Compute total weight kg
   const totalWeightKg = useMemo(() => {
     return lines.reduce((acc, ln) => acc + ((variants[ln.variant_id]?.weight_kg || 0) * ln.qty), 0);
@@ -413,8 +465,6 @@ function CheckoutInner() {
     })();
   }, [productId, provinceCode, city, lines, subtotal, totalWeightKg]);
 
-  
-
   // Basic client-side validators
   const isValidName = (s: string) => /^[A-Za-z ]+$/.test(s.trim());
   // Pakistan numbers: require +92 then 10 digits (e.g., +923001234567)
@@ -450,6 +500,7 @@ function CheckoutInner() {
       const city0 = String(fd0.get("city") || "").trim();
       const address0 = String(fd0.get("address") || "").trim();
       const province0 = String(fd0.get("province_code") || "").trim();
+      const refCode0 = String(fd0.get("ref_code") || "").trim().toUpperCase();
 
       if (!isValidName(name0)) {
         throw new Error("Please enter a valid full name (letters and spaces only)");
@@ -542,6 +593,7 @@ function CheckoutInner() {
           province_code: province0 || undefined,
           city: city0 || undefined,
         },
+        ref_code: refCode0 || undefined,
         fbMeta: { fbp: fbp || null, fbc: fbc || null },
       };
       const res = await fetch("/api/orders/create", {
@@ -554,7 +606,9 @@ function CheckoutInner() {
       // success: store id, clear cart in UI + URL, reset form
       setSuccess({ order_id: data.order_id });
       // capture totals before clearing
-      const s = Number(subtotal) || 0;
+      const baseSubtotal = Number(subtotal) || 0;
+      const appliedRefDiscount = refStatus === 'valid' ? Number(refDiscountAmount || 0) : 0;
+      const s = Math.max(0, baseSubtotal - appliedRefDiscount);
       const ship = Number(shippingAmount || 0);
       setSuccessTotals({ subtotal: s, shipping: ship, total: s + ship });
 
@@ -794,6 +848,50 @@ function CheckoutInner() {
               <input name="email" type="email" className="border rounded px-3 py-2 w-full" placeholder="name@example.com" />
             </div>
             <div>
+              <label className="block text-sm">Referral / Beautician code (optional)</label>
+              <div className="flex gap-2">
+                <input
+                  name="ref_code"
+                  value={refCode}
+                  onChange={(e) => {
+                    setRefCode(e.target.value.toUpperCase());
+                    setRefStatus('idle');
+                    setRefDiscountAmount(0);
+                  }}
+                  className="border rounded px-3 py-2 w-full"
+                  placeholder="e.g. SANA01"
+                />
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded border text-sm"
+                  disabled={!refCode.trim() || refStatus === 'checking'}
+                  onClick={async () => {
+                    const code = refCode.trim().toUpperCase();
+                    if (!code) return;
+                    try {
+                      setRefStatus('checking');
+                      const res = await fetch(`/api/affiliate/validate?code=${encodeURIComponent(code)}`);
+                      const data = await res.json();
+                      const valid = !!data?.valid;
+                      setRefStatus(valid ? 'valid' : 'invalid');
+                      recomputeReferralDiscount(valid);
+                    } catch {
+                      setRefStatus('invalid');
+                      setRefDiscountAmount(0);
+                    }
+                  }}
+                >
+                  {refStatus === 'checking' ? 'Checking…' : 'Apply'}
+                </button>
+              </div>
+              {refStatus === 'valid' && refDiscountAmount > 0 && (
+                <p className="mt-1 text-xs text-emerald-700">Referral discount applied.</p>
+              )}
+              {refStatus === 'invalid' && (
+                <p className="mt-1 text-xs text-red-600">Code not recognized. Order will be placed without discount.</p>
+              )}
+            </div>
+            <div>
               <label className="block text-sm">City</label>
               {(enableCityRates && hasCityRules) && provinceCode ? (
                 <select
@@ -882,19 +980,36 @@ function CheckoutInner() {
           </div>
           {discount > 0 && (
             <div className="text-xs text-green-700 bg-green-50 border border-green-100 rounded px-2 py-1.5">
-              Congrats! You got
-              {" "}
-              <span className="font-semibold">{promoLabel || 'a promotion'}</span>
-              {" "}
+              Congrats! You got{' '}
+              <span className="font-semibold">{promoLabel || 'a promotion'}</span>{' '}
               discount (saving PKR {Number(discount).toLocaleString()}).
+            </div>
+          )}
+          {refStatus === 'valid' && refDiscountAmount > 0 && !success && (
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5">
+              Referral discount applied (saving PKR {Number(refDiscountAmount).toLocaleString()}).
             </div>
           )}
           <div className="flex items-center justify-between text-sm">
             <span>Items subtotal</span>
             <span>
-              PKR {Number(success ? successTotals.subtotal : subtotal).toLocaleString()}
+              {success
+                ? `PKR ${Number(successTotals.subtotal).toLocaleString()}`
+                : `PKR ${Number(subtotal).toLocaleString()}`}
             </span>
           </div>
+          {refStatus === 'valid' && refDiscountAmount > 0 && !success && (
+            <div className="flex items-center justify-between text-sm">
+              <span>Referral discount</span>
+              <span>- PKR {Number(refDiscountAmount).toLocaleString()}</span>
+            </div>
+          )}
+          {!success && refDiscountAmount > 0 && (
+            <div className="flex items-center justify-between text-sm font-medium">
+              <span>Subtotal after discount</span>
+              <span>PKR {Number(Math.max(0, subtotal - refDiscountAmount)).toLocaleString()}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between text-sm">
             <span>Shipping</span>
             <span>
@@ -913,7 +1028,9 @@ function CheckoutInner() {
             <span>Total</span>
             <span>
               {(() => {
-                const base = Number(success ? successTotals.subtotal : subtotal) || 0;
+                const base = success
+                  ? Number(successTotals.subtotal) || 0
+                  : Math.max(0, Number(subtotal) - Number(refDiscountAmount || 0));
                 const ship = success ? Number(successTotals.shipping) || 0 : Number(shippingAmount || 0);
                 return `PKR ${(base + ship).toLocaleString()}`;
               })()}
