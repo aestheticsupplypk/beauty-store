@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const site = 'https://afalstore.com';
+  const site = 'https://aestheticpk.com';
   return {
     rules: [
       { userAgent: '*', allow: '/' },

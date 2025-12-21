@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const site = 'https://afalstore.com';
+  const site = 'https://aestheticpk.com';
   const supabase = getSupabaseServerClient();
   const { data: products } = await supabase
     .from('products')
