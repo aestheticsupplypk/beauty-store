@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://aestheticpk.com';
+// Use a fixed canonical base URL so the sitemap always matches the verified
+// domain in Google Search Console and avoids "URL not allowed" errors.
+const BASE_URL = 'https://aestheticpk.com';
 
 export async function GET() {
   try {
