@@ -69,6 +69,7 @@ export default async function HomeServerContainer() {
     .order('created_at', { ascending: false });
 
   let productCards: { id: string; name: string; slug: string; fromPrice: number | null; image: string | null }[] = [];
+  let primaryGallery: string[] = [];
   for (const p of products ?? []) {
     const pid = (p as any).id as string;
     const slug = (p as any).slug as string;
@@ -86,9 +87,12 @@ export default async function HomeServerContainer() {
       .select('url, type, sort')
       .eq('product_id', pid)
       .eq('type', 'image')
-      .order('sort', { ascending: true })
-      .limit(1);
+      .order('sort', { ascending: true });
     const image = (media && media.length) ? (media[0] as any).url as string : null;
+    // For the primary product when there is only a single product overall, capture up to 4 gallery images
+    if ((products?.length || 0) === 1 && primary?.id && pid === primary.id && media && media.length) {
+      primaryGallery = (media as any[]).slice(0, 4).map((m) => (m as any).url as string).filter(Boolean);
+    }
     productCards.push({ id: pid, name, slug, fromPrice, image });
   }
 
@@ -98,6 +102,7 @@ export default async function HomeServerContainer() {
       colorPrices={colorPrices}
       colorAvailability={colorAvailability}
       products={productCards}
+      primaryGallery={primaryGallery}
     />
   );
 }

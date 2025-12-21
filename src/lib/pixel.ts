@@ -43,9 +43,32 @@ export function ensurePixel(pixelId?: string | null) {
   }
 }
 
-export function track(event: string, params?: Record<string, any>) {
+export function track(event: string, params?: Record<string, any>, opts?: { eventID?: string }) {
   if (typeof window === 'undefined') return false;
   const w = window as any;
   if (!w.fbq) return false;
-  try { w.fbq('track', event, params || {}); return true; } catch { return false; }
+
+  try {
+    let payload: Record<string, any> = params || {};
+    let eventID: string | undefined = opts?.eventID;
+
+    // Backwards-compatible mapping: if callers pass `event_id` inside params,
+    // strip it out and use it as Meta's { eventID } 4th argument.
+    if (!eventID && payload && typeof payload === 'object' && 'event_id' in payload) {
+      const { event_id, ...rest } = payload as any;
+      if (event_id != null) {
+        eventID = String(event_id);
+      }
+      payload = rest;
+    }
+
+    if (eventID) {
+      w.fbq('track', event, payload, { eventID });
+    } else {
+      w.fbq('track', event, payload);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }

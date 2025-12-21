@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import Link from "next/link";
 import { ensurePixel, track } from "@/lib/pixel";
+import { getMetaContentId } from "@/lib/metaContentId";
 
 type CartItem = { variant_id: string; qty: number };
 
@@ -407,6 +408,26 @@ function CheckoutInner() {
     return lines.reduce((acc, ln) => acc + ((variants[ln.variant_id]?.weight_kg || 0) * ln.qty), 0);
   }, [lines, variants]);
 
+  // Shared builder for Meta `contents` + `value` using getMetaContentId helper
+  const buildMetaContentsAndValue = () => {
+    if (!pixelCfg) return { contents: [] as any[], value: 0 };
+    const contents = lines.map((ln) => {
+      const v = variants[ln.variant_id];
+      const id = getMetaContentId({ id: ln.variant_id, sku: v?.sku }, pixelCfg.content_id_source);
+      const price = Number(v?.price || 0);
+      return {
+        id,
+        quantity: ln.qty,
+        item_price: price,
+      };
+    });
+    const value = lines.reduce((s, ln) => {
+      const v = variants[ln.variant_id];
+      return s + (Number(v?.price || 0) * ln.qty);
+    }, 0);
+    return { contents, value };
+  };
+
   // Fire InitiateCheckout once when items + pixel config ready
   useEffect(() => {
     if (success) return; // do not fire after success
@@ -422,16 +443,7 @@ function CheckoutInner() {
     if (!allPriced) return;
     const ok = ensurePixel(pixelCfg.pixel_id);
     if (!ok) return;
-    const build = () => {
-      const contents = lines.map((ln) => ({
-        id: (pixelCfg.content_id_source === 'variant_id' ? ln.variant_id : (variants[ln.variant_id]?.sku || ln.variant_id)),
-        quantity: ln.qty,
-        item_price: Number(variants[ln.variant_id]?.price || 0),
-      }));
-      const value = lines.reduce((s, ln) => s + (Number(variants[ln.variant_id]?.price || 0) * ln.qty), 0);
-      return { contents, value };
-    };
-    const { contents, value } = build();
+    const { contents, value } = buildMetaContentsAndValue();
     track('InitiateCheckout', { contents, value, currency: 'PKR', content_type: 'product' });
     firedInitRef.current = true;
   }, [pixelCfg, lines, variants, success]);
@@ -525,12 +537,7 @@ function CheckoutInner() {
       if (!firedAddPaymentRef.current && pixelCfg && pixelCfg.enabled && pixelCfg.pixel_id && !(pixelCfg.events && pixelCfg.events.add_payment_info === false)) {
         const okPx = ensurePixel(pixelCfg.pixel_id);
         if (okPx) {
-          const contents = lines.map((ln) => ({
-            id: (pixelCfg.content_id_source === 'variant_id' ? ln.variant_id : (variants[ln.variant_id]?.sku || ln.variant_id)),
-            quantity: ln.qty,
-            item_price: Number(variants[ln.variant_id]?.price || 0),
-          }));
-          const value = lines.reduce((s, ln) => s + (Number(variants[ln.variant_id]?.price || 0) * ln.qty), 0);
+          const { contents, value } = buildMetaContentsAndValue();
           track('AddPaymentInfo', { contents, value, currency: 'PKR', content_type: 'product' });
           firedAddPaymentRef.current = true;
         }
@@ -612,18 +619,19 @@ function CheckoutInner() {
       const ship = Number(shippingAmount || 0);
       setSuccessTotals({ subtotal: s, shipping: ship, total: s + ship });
 
-      // Fire Purchase (exclude shipping) after success
+      // Fire Purchase (browser) after success — include shipping for parity with CAPI
       if (!firedPurchaseRef.current && pixelCfg && pixelCfg.enabled && pixelCfg.pixel_id && !(pixelCfg.events && pixelCfg.events.purchase === false)) {
         const okPx2 = ensurePixel(pixelCfg.pixel_id);
         if (okPx2) {
-          const contents = lines.map((ln) => ({
-            id: (pixelCfg.content_id_source === 'variant_id' ? ln.variant_id : (variants[ln.variant_id]?.sku || ln.variant_id)),
-            quantity: ln.qty,
-            item_price: Number(variants[ln.variant_id]?.price || 0),
-          }));
-          const value = Number(subtotal) || 0; // exclude shipping per requirement
-          // Include event_id returned from server (order_id) to dedupe with CAPI
-          track('Purchase', { contents, value, currency: 'PKR', content_type: 'product', event_id: data.order_id });
+          const { contents, value: itemsValue } = buildMetaContentsAndValue();
+          const shipVal = Number(shippingAmount || 0);
+          const value = itemsValue + shipVal;
+          // Use order_id as the shared event ID for browser↔CAPI dedup
+          track(
+            'Purchase',
+            { contents, value, currency: 'PKR', content_type: 'product' },
+            { eventID: String(data.order_id) }
+          );
           firedPurchaseRef.current = true;
         }
       }
