@@ -44,7 +44,14 @@ export default function AffiliateDashboardPage() {
       }
       setData(json as AffiliateSummary);
     } catch (err: any) {
-      setError(err?.message || "Something went wrong");
+      const raw = String(err?.message || "Something went wrong");
+      const msg = raw.toLowerCase();
+
+      // On initial load we do NOT want to show an error if the affiliate profile is missing.
+      // That message should only appear reactively after a failed login attempt.
+      if (!msg.includes("affiliate profile not found")) {
+        setError(raw);
+      }
       setData(null);
     } finally {
       setLoading(false);
@@ -76,11 +83,24 @@ export default function AffiliateDashboardPage() {
         password,
       });
       if (signInErr) {
+        const raw = String(signInErr.message || "Login failed");
+        const msg = raw.toLowerCase();
+        if (msg.includes("invalid login") || msg.includes("invalid login credentials")) {
+          throw new Error("Incorrect email or password. Please try again.");
+        }
         throw signInErr;
       }
       await loadForCurrentUser();
     } catch (err: any) {
-      setError(err?.message || "Login failed");
+      const raw = String(err?.message || "Login failed");
+      const msg = raw.toLowerCase();
+      if (msg.includes("affiliate profile not found")) {
+        setError(
+          "We couldnt find an affiliate account linked to this email. Please make sure you signed up as an affiliate, or create a new account below."
+        );
+      } else {
+        setError(raw);
+      }
       setData(null);
     } finally {
       setLoading(false);
@@ -88,19 +108,26 @@ export default function AffiliateDashboardPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Affiliate Dashboard</h1>
-        <p className="text-sm text-gray-600">
-          Sign in with the email and password you used when creating your affiliate account to see
-          your orders, sales, and commission.
+    <div className="max-w-3xl mx-auto px-4 py-5 space-y-5">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold">Affiliate Partner Login</h1>
+        <p className="text-sm text-gray-700">
+          Log in to view your referral code, tracked orders, and earnings.
+        </p>
+        <p className="text-xs text-gray-500">
+          Access your affiliate dashboard in one place – no spreadsheets, no manual tracking.
         </p>
       </div>
 
       {!data && checkedSession && (
-        <form onSubmit={handleLogin} className="space-y-3 border rounded p-4 bg-white">
+        <form
+          onSubmit={handleLogin}
+          className="space-y-4 border rounded-lg bg-gray-50/80 shadow-sm p-5"
+        >
           {error && (
-            <div className="border rounded p-3 text-sm bg-red-50 text-red-700">{error}</div>
+            <div className="border rounded p-3 text-sm bg-gray-50 text-gray-800 border-gray-200">
+              {error}
+            </div>
           )}
           <div>
             <label className="block text-sm mb-1">Email</label>
@@ -111,6 +138,7 @@ export default function AffiliateDashboardPage() {
               className="border rounded px-3 py-2 w-full"
               placeholder="name@example.com"
               required
+              autoFocus
             />
           </div>
           <div>
@@ -122,14 +150,40 @@ export default function AffiliateDashboardPage() {
               className="border rounded px-3 py-2 w-full"
               required
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Forgot your password? Contact us on WhatsApp and we'll help you reset it.
+            </p>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className={`rounded px-5 py-2.5 text-white ${loading ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
-          >
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
+          <div className="space-y-2 pt-1">
+            <button
+              type="submit"
+              disabled={loading}
+              className={`rounded px-5 py-2.5 text-white ${loading ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
+            >
+              {loading ? "Signing in…" : "Sign in"}
+            </button>
+            <p className="text-xs text-gray-500">
+              Your information is secure and only used for affiliate account access.
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-2 text-xs text-gray-600">
+            <p>
+              Only registered affiliate partners can access this dashboard. If you signed up recently,
+              please log in using the same email you used for signup.
+            </p>
+            <p className="flex items-center gap-1">
+              <span>Don't have an affiliate account yet?</span>
+              <a
+                href="/affiliate/signup"
+                className="inline-flex items-center gap-1 text-emerald-700 font-medium hover:underline"
+              >
+                <span>Create one here</span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </p>
+            <p>Questions or issues? Contact us on WhatsApp and we'll be happy to help.</p>
+          </div>
         </form>
       )}
 

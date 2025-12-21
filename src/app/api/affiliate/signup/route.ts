@@ -61,9 +61,19 @@ export async function POST(req: Request) {
       password,
       email_confirm: true,
     });
-    if (userErr || !userRes?.user) {
-      console.error('[affiliate/signup] auth user error', userErr?.message);
-      return NextResponse.json({ error: 'Failed to create affiliate account' }, { status: 500 });
+    if (userErr) {
+      console.error("Error creating auth user", userErr.message);
+
+      // Handle case where email is already registered in Supabase auth
+      const msg = String(userErr.message || "").toLowerCase();
+      if (msg.includes("user already registered") || msg.includes("already exists")) {
+        return NextResponse.json(
+          { error: "An account with this email already exists. Please log in instead." },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({ error: "Failed to create user" }, { status: 400 });
     }
 
     const { data, error } = await supabase

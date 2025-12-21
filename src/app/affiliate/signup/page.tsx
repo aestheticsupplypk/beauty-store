@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
@@ -11,6 +11,8 @@ export default function AffiliateSignupPage() {
   const [success, setSuccess] = useState<{ code: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showPassword2, setShowPassword2] = useState(false);
+  const [showStickyCta, setShowStickyCta] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,9 +41,11 @@ export default function AffiliateSignupPage() {
       setError("Passwords do not match");
       return;
     }
-    const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
-    if (!strongRegex.test(pwd)) {
-      setError("Password must be 8-20 characters with upper, lower, number, and special character");
+    // Simpler, friendlier rule: at least 8 characters, letters and numbers only,
+    // and must contain at least one letter and one number.
+    const simpleRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,20}$/;
+    if (!simpleRegex.test(pwd)) {
+      setError("Password must be 8-20 characters, using letters and numbers with at least one of each");
       return;
     }
 
@@ -86,12 +90,52 @@ export default function AffiliateSignupPage() {
     }
   };
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const y = window.scrollY || window.pageYOffset;
+      const viewportH = window.innerHeight || 0;
+      const docH = document.documentElement?.scrollHeight || 0;
+
+      const pastTop = y > 280;
+      const nearBottom = y + viewportH >= docH - 80;
+      setShowStickyCta(pastTop && !nearBottom);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <div className="max-w-xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Affiliate / Beautician Signup</h1>
-      <p className="text-sm text-gray-600">
-        This page is for invited parlours and beauticians only. After you submit your details, you
-        will receive a unique referral code to share with your clients.
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="space-y-2 rounded-lg bg-emerald-50/70 border border-emerald-100 px-4 py-3">
+        <p className="text-xs font-medium text-emerald-700 flex items-center gap-1">
+          <span aria-hidden="true">💸</span>
+          <span>Earn from the trust you already have with your clients.</span>
+        </p>
+        <h1 className="text-2xl font-semibold">Affiliate / Beautician Partner Signup</h1>
+        <p className="text-sm text-gray-800">
+          Sign up to receive your personal referral code, track your earnings, and earn commission
+          every time your clients order using your code.
+        </p>
+        <p className="text-xs text-gray-600">
+          ✔ Free to join · No stock required · No upfront investment
+        </p>
+      </div>
+
+      {/* What happens after you sign up */}
+      <div className="border rounded-lg bg-white shadow-sm p-4 text-sm text-gray-800 space-y-2">
+        <h2 className="font-medium text-base">What happens after you sign up?</h2>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Your affiliate account is created instantly.</li>
+          <li>You receive a personal referral code to share with clients.</li>
+          <li>You can log in to your dashboard to see tracked orders and earnings.</li>
+          <li>Start sharing your code – you earn commission when clients order using it.</li>
+        </ul>
+      </div>
+
+      <p className="text-xs text-gray-600">
+        Trusted by beauticians, salons, and beauty students across Pakistan.
       </p>
 
       {success ? (
@@ -106,7 +150,7 @@ export default function AffiliateSignupPage() {
           </p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4 border rounded p-4 bg-white">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 border rounded p-4 bg-white">
           {error && (
             <div className="border rounded p-3 text-sm bg-red-50 text-red-700">{error}</div>
           )}
@@ -125,6 +169,7 @@ export default function AffiliateSignupPage() {
               name="name"
               required
               className="border rounded px-3 py-2 w-full"
+              autoFocus
               placeholder="Your full name"
             />
           </div>
@@ -146,6 +191,9 @@ export default function AffiliateSignupPage() {
               className="border rounded px-3 py-2 w-full"
               placeholder="03XXXXXXXXX"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              We use WhatsApp only for important updates and support. No spam, only important updates.
+            </p>
           </div>
 
           <div>
@@ -179,7 +227,7 @@ export default function AffiliateSignupPage() {
                 minLength={8}
                 maxLength={20}
                 className="border rounded px-3 py-2 w-full pr-10"
-                placeholder="At least 8 characters with Aa1@"
+                placeholder="Password"
               />
               <button
                 type="button"
@@ -189,9 +237,7 @@ export default function AffiliateSignupPage() {
                 👁
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Must be 8-20 characters and include uppercase, lowercase, number, and special character.
-            </p>
+            <p className="mt-1 text-xs text-gray-500">Use 8-20 characters with letters and numbers.</p>
           </div>
 
           <div>
@@ -225,14 +271,50 @@ export default function AffiliateSignupPage() {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className={`rounded px-5 py-2.5 text-white ${submitting ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
-          >
-            {submitting ? "Submitting…" : "Create account"}
-          </button>
+          <div className="space-y-3 pt-1">
+            <p className="text-sm text-gray-800">
+              Start earning from the trust you&apos;ve already built with your clients.
+            </p>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className={`w-full sm:w-auto rounded px-5 py-2.5 text-white ${submitting ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
+            >
+              {submitting ? "Submitting…" : "Create account"}
+            </button>
+
+            <p className="text-xs text-gray-500">
+              By creating an account, you agree to our affiliate terms and privacy policy. Your
+              information is kept private and secure.
+            </p>
+          </div>
         </form>
+      )}
+
+      <div className="pt-2 space-y-1 text-xs text-gray-600">
+        <p>
+          Already a partner? <a href="/affiliate/dashboard" className="underline">Log in</a>
+        </p>
+        <p>
+          Questions? Contact us on WhatsApp and we&apos;ll be happy to help.
+        </p>
+      </div>
+
+      {/* Sticky bottom CTA - mobile only */}
+      {showStickyCta && !success && (
+        <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 border-t border-gray-200 shadow-[0_-4px_12px_rgba(15,23,42,0.16)] md:hidden">
+          <div className="max-w-4xl mx-auto px-4 py-2">
+            <button
+              type="button"
+              onClick={() => formRef.current?.requestSubmit()}
+              disabled={submitting}
+              className={`w-full rounded px-5 py-2.5 text-white ${submitting ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
+            >
+              {submitting ? "Submitting…" : "Create account"}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
