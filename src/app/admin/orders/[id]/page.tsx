@@ -17,7 +17,7 @@ async function fetchOrder(id: string) {
   // Fetch order lines with variant SKU
   const { data: lines, error: linesError } = await supabase
     .from('order_lines')
-    .select('id, order_id, variant_id, qty, unit_price, line_total, variants!inner(sku)')
+    .select('id, order_id, variant_id, qty, unit_price, line_total, returned_qty, return_status, variants!inner(sku)')
     .eq('order_id', id);
   if (linesError) throw linesError;
 
@@ -124,6 +124,88 @@ async function addPayment(formData: FormData) {
   revalidatePath('/admin/orders');
 }
 
+async function returnLineAction(formData: FormData) {
+  'use server';
+  await requireAdmin();
+
+  const orderId = String(formData.get('order_id') || '');
+  const lineId = String(formData.get('line_id') || '');
+  const action = String(formData.get('action') || 'good');
+  const rawQty = String(formData.get('qty') || '').trim();
+
+  const qtyRequested = Number(rawQty || 0);
+  if (!orderId || !lineId || !Number.isFinite(qtyRequested) || qtyRequested <= 0) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    return;
+  }
+
+  const kind: 'good' | 'damaged' | 'lost' =
+    action === 'damaged' || action === 'lost' ? (action as any) : 'good';
+
+  const supabase = getSupabaseServerClient();
+
+  // Load line and ensure it belongs to a shipped order
+  const { data: lineRow, error: lineErr } = await supabase
+    .from('order_lines')
+    .select('id, order_id, variant_id, qty, returned_qty, return_status, orders!inner(status)')
+    .eq('id', lineId)
+    .maybeSingle();
+  if (lineErr || !lineRow) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    return;
+  }
+
+  const totalQty = Number((lineRow as any).qty || 0);
+  const prevReturned = Number((lineRow as any).returned_qty || 0);
+  const remaining = Math.max(0, totalQty - prevReturned);
+
+  if (remaining <= 0) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    return;
+  }
+
+  const applyQty = Math.min(remaining, qtyRequested);
+  if (!applyQty || applyQty <= 0) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    return;
+  }
+
+  const newReturned = prevReturned + applyQty;
+  let newStatus: string = (lineRow as any).return_status || 'none';
+  if (kind === 'good') newStatus = 'returned_good';
+  else if (kind === 'damaged') newStatus = 'returned_damaged';
+  else if (kind === 'lost') newStatus = 'returned_lost';
+
+  // Update line first
+  await supabase
+    .from('order_lines')
+    .update({ returned_qty: newReturned, return_status: newStatus })
+    .eq('id', lineId);
+
+  // For good returns, put stock back via adjust_stock RPC using the SKU
+  if (kind === 'good') {
+    const vid = (lineRow as any).variant_id as string | null;
+    if (vid) {
+      const { data: variant } = await supabase
+        .from('variants')
+        .select('sku')
+        .eq('id', vid)
+        .maybeSingle();
+      const sku = (variant as any)?.sku as string | undefined;
+      if (sku) {
+        await supabase.rpc('adjust_stock', {
+          p_sku: sku,
+          p_delta: applyQty,
+          p_reason: 'return_good',
+        });
+      }
+    }
+  }
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/inventory');
+}
+
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
   await requireAdmin();
   const id = params.id;
@@ -221,17 +303,73 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     <th className="py-2 pr-4">Qty</th>
                     <th className="py-2 pr-4">Unit Price</th>
                     <th className="py-2 pr-4">Line Total</th>
+                    <th className="py-2 pr-4">Returns</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it: any) => (
-                    <tr key={it.id} className="border-b">
-                      <td className="py-2 pr-4">{it.variants?.sku || it.variant_id}</td>
-                      <td className="py-2 pr-4">{it.qty}</td>
-                      <td className="py-2 pr-4">{Number(it.unit_price).toLocaleString()} PKR</td>
-                      <td className="py-2 pr-4">{Number(it.line_total).toLocaleString()} PKR</td>
-                    </tr>
-                  ))}
+                  {items.map((it: any) => {
+                    const returnedQty = Number(it.returned_qty || 0);
+                    const status = String(it.return_status || 'none');
+                    const remaining = Math.max(0, Number(it.qty || 0) - returnedQty);
+                    const hasReturn = returnedQty > 0 && status !== 'none';
+                    const statusLabel =
+                      status === 'returned_good'
+                        ? 'Returned to stock'
+                        : status === 'returned_damaged'
+                        ? 'Damaged / written off'
+                        : status === 'returned_lost'
+                        ? 'Lost / written off'
+                        : '';
+
+                    return (
+                      <tr key={it.id} className="border-b align-top">
+                        <td className="py-2 pr-4">{it.variants?.sku || it.variant_id}</td>
+                        <td className="py-2 pr-4">{it.qty}</td>
+                        <td className="py-2 pr-4">{Number(it.unit_price).toLocaleString()} PKR</td>
+                        <td className="py-2 pr-4">{Number(it.line_total).toLocaleString()} PKR</td>
+                        <td className="py-2 pr-4">
+                          {hasReturn && (
+                            <div className="mb-1 text-xs text-gray-700">
+                              <div>
+                                Returned: <span className="font-medium">{returnedQty}</span>
+                              </div>
+                              <div className="italic">{statusLabel}</div>
+                            </div>
+                          )}
+                          {remaining > 0 && (
+                            <form action={returnLineAction} className="flex flex-col gap-1 text-xs border rounded p-2 bg-gray-50">
+                              <input type="hidden" name="order_id" value={order.id} />
+                              <input type="hidden" name="line_id" value={it.id} />
+                              <label className="flex flex-col gap-1">
+                                <span>Action</span>
+                                <select name="action" className="border rounded px-2 py-1 bg-white">
+                                  <option value="good">Return to inventory</option>
+                                  <option value="damaged">Write off as damaged</option>
+                                  <option value="lost">Write off as lost</option>
+                                </select>
+                              </label>
+                              <label className="flex flex-col gap-1 mt-1">
+                                <span>
+                                  Qty (max {remaining})
+                                </span>
+                                <input
+                                  name="qty"
+                                  type="number"
+                                  min={1}
+                                  max={remaining}
+                                  defaultValue={remaining}
+                                  className="border rounded px-2 py-1"
+                                />
+                              </label>
+                              <button className="mt-2 bg-black text-white rounded px-2 py-1 text-xs" type="submit">
+                                Apply
+                              </button>
+                            </form>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr>

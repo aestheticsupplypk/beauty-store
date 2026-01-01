@@ -42,11 +42,64 @@ export async function POST(req: Request) {
     return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
   }
 
-  const items: { qty: number; price: number }[] = [];
+  const items: { qty: number; price: number; product_id: string | null; variant_id: string | null }[] = [];
   for (let i = 0; i < 5; i++) {
     const qty = parseIntOrZero(formData.get(`items[${i}][qty]`));
     const price = parsePriceOrZero(formData.get(`items[${i}][price]`));
-    if (qty > 0 && price >= 0) items.push({ qty, price });
+    const rawProductId = String(formData.get(`items[${i}][product_id]`) || '').trim();
+    const rawVariantId = String(formData.get(`items[${i}][variant_id]`) || '').trim();
+    const product_id = rawProductId || null;
+    const variant_id = rawVariantId || null;
+    if (qty > 0 && price >= 0) items.push({ qty, price, product_id, variant_id });
+  }
+
+  // If a product is selected but no variant is chosen, try to auto-resolve when there is exactly one variant.
+  // If there are multiple variants and none is chosen, we block to avoid ambiguous inventory deductions.
+  const productIdsNeedingVariant = Array.from(
+    new Set(
+      items
+        .filter((it) => it.product_id && !it.variant_id)
+        .map((it) => String(it.product_id))
+    )
+  );
+
+  if (productIdsNeedingVariant.length > 0) {
+    const { data: variantRows, error: vErr } = await supabase
+      .from('variants')
+      .select('id, product_id')
+      .in('product_id', productIdsNeedingVariant);
+
+    if (vErr) {
+      console.error('[manual-order] failed to resolve variants for products', vErr);
+      return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
+    }
+
+    const variantsByProduct = new Map<string, string[]>();
+    (variantRows || []).forEach((row: any) => {
+      const pid = String(row.product_id || '');
+      const vid = String(row.id || '');
+      if (!pid || !vid) return;
+      const list = variantsByProduct.get(pid) || [];
+      list.push(vid);
+      variantsByProduct.set(pid, list);
+    });
+
+    for (const it of items) {
+      if (!it.product_id || it.variant_id) continue;
+      const pid = String(it.product_id);
+      const list = variantsByProduct.get(pid) || [];
+      if (list.length === 1) {
+        // Auto-attach the single variant for convenience
+        it.variant_id = list[0];
+      } else if (list.length > 1) {
+        console.warn(
+          '[manual-order] product has multiple variants but no variant selected; blocking order creation',
+          { product_id: pid }
+        );
+        return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
+      }
+      // If list.length === 0, leave variant_id as null (no inventory effect)
+    }
   }
 
   if (items.length === 0) {
@@ -115,12 +168,66 @@ export async function POST(req: Request) {
     // Price is per-piece; line_total is qty * pricePerPiece
     unit_price: it.price,
     line_total: it.qty * it.price,
+    // product_id / variant_id columns are optional; Supabase will ignore them if they don't exist
+    product_id: it.product_id,
+    variant_id: it.variant_id,
   }));
 
-  const { error: itemsError } = await supabase.from('order_items').insert(payload);
+  const { error: itemsError } = await supabase.from('order_items').insert(payload as any[]);
   if (itemsError) {
     console.error('[manual-order] failed to insert order_items', itemsError);
     return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
+  }
+
+  // Create order_lines for any line that has a variant_id so that inventory and packing slips work consistently
+  const lines = items
+    .filter((it) => it.variant_id && it.qty > 0)
+    .map((it) => ({
+      order_id: order.id,
+      variant_id: it.variant_id!,
+      qty: it.qty,
+      unit_price: it.price,
+      line_total: it.qty * it.price,
+    }));
+
+  if (lines.length > 0) {
+    const { error: linesError } = await supabase.from('order_lines').insert(lines as any[]);
+    if (linesError) {
+      console.error('[manual-order] failed to insert order_lines', linesError);
+      return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
+    }
+
+    // Reserve inventory at order creation: increase inventory.reserved for each variant
+    for (const ln of lines) {
+      const vid = ln.variant_id as string;
+      const qty = ln.qty;
+      if (!vid || !qty || qty <= 0) continue;
+
+      const { data: cur } = await supabase
+        .from('inventory')
+        .select('stock_on_hand, reserved')
+        .eq('variant_id', vid)
+        .maybeSingle();
+
+      const currentOnHand = Number((cur as any)?.stock_on_hand ?? 0);
+      const currentReserved = Number((cur as any)?.reserved ?? 0);
+
+      const { error: invErr } = await supabase
+        .from('inventory')
+        .upsert(
+          {
+            variant_id: vid,
+            stock_on_hand: currentOnHand,
+            reserved: currentReserved + qty,
+          } as any,
+          { onConflict: 'variant_id' }
+        );
+
+      if (invErr) {
+        console.error('[manual-order] failed to reserve inventory', invErr);
+        return NextResponse.redirect(new URL('/admin/orders/new2', req.url));
+      }
+    }
   }
 
   return NextResponse.redirect(new URL(`/admin/orders/${order.id}`, req.url));

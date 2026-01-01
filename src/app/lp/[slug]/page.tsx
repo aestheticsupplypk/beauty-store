@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
+import { SITE_URL } from '@/lib/site';
 import BuyPanel from '@/components/web/landing/BuyPanel';
 import dynamic from 'next/dynamic';
 const ReviewsSection = dynamic(() => import('@/components/web/reviews/ReviewsSection'), { ssr: false });
@@ -311,7 +312,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
   const ctaSize = ((product as any).cta_size as string | null) || 'medium';
 
   // Build Product JSON-LD for SEO
-  const site = 'https://afalstore.com';
+  const site = SITE_URL;
   const canonical = `${site}/lp/${product.slug}`;
   const images = mediaItems.filter((m:any)=>m.type==='image').map((m:any)=>m.src);
   const lowest = (variants||[]).reduce((min:number, v:any)=> Math.min(min, Number(v.price||Infinity)), Infinity);
@@ -586,7 +587,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     const firstImg = (media||[]).find((m:any)=>m.type==='image');
     if (firstImg?.url) ogImage = firstImg.url as string;
   }
-  const site = 'https://afalstore.com';
+  const site = SITE_URL;
   const canonical = product?.slug ? `${site}/lp/${product.slug}` : site;
   return {
     title,

@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import Link from 'next/link';
 
-type Search = { q?: string; status?: string; productId?: string; payment?: string; source?: string };
+type Search = { q?: string; status?: string; productId?: string; payment?: string; source?: string; returns?: string };
 
 async function fetchOrders(search: Search) {
   const supabase = getSupabaseServerClient();
@@ -47,13 +47,19 @@ async function fetchOrders(search: Search) {
   // Fetch totals per order from order_lines (preferred: sum of line_total)
   const { data: lines } = await supabase
     .from('order_lines')
-    .select('order_id, line_total')
+    .select('order_id, line_total, returned_qty, return_status')
     .in('order_id', ids);
 
   const totalsFromLines: Record<string, number> = {};
+  const hasReturnsMap: Record<string, boolean> = {};
   for (const ln of lines ?? []) {
     const key = String((ln as any).order_id);
     totalsFromLines[key] = (totalsFromLines[key] ?? 0) + Number((ln as any).line_total || 0);
+    const returnedQty = Number((ln as any).returned_qty || 0);
+    const status = String((ln as any).return_status || 'none');
+    if (returnedQty > 0 && status !== 'none') {
+      hasReturnsMap[key] = true;
+    }
   }
   let result = (data ?? []).map((o) => {
     const idKey = String(o.id);
@@ -68,6 +74,7 @@ async function fetchOrders(search: Search) {
       total,
       amount_paid: amountPaid,
       amount_due: amountDue,
+      has_returns: !!hasReturnsMap[idKey],
     };
   });
 
@@ -76,6 +83,13 @@ async function fetchOrders(search: Search) {
     result = result.filter((o: any) => Number(o.amount_due || 0) > 0);
   } else if (search.payment === 'paid') {
     result = result.filter((o: any) => Number(o.amount_due || 0) <= 0 && Number(o.total || 0) > 0);
+  }
+
+  // Filter by returns
+  if (search.returns === 'with') {
+    result = result.filter((o: any) => !!(o as any).has_returns);
+  } else if (search.returns === 'without') {
+    result = result.filter((o: any) => !(o as any).has_returns);
   }
 
   return result;
@@ -96,6 +110,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Searc
   const currentProduct = searchParams?.productId ?? 'all';
   const currentPayment = searchParams?.payment ?? 'all';
   const currentSource = searchParams?.source ?? 'all';
+  const currentReturns = searchParams?.returns ?? 'all';
 
   // Fetch products for the dropdown
   const { data: products } = await supabase
@@ -131,6 +146,14 @@ return (
             <option value="packed">Packed</option>
             <option value="shipped">Shipped</option>
             <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm">Returns</label>
+          <select name="returns" defaultValue={currentReturns} className="border rounded px-3 py-2">
+            <option value="all">All</option>
+            <option value="with">With returns</option>
+            <option value="without">Without returns</option>
           </select>
         </div>
         <div>
@@ -209,7 +232,16 @@ return (
                     return <span className={cls}>{label}</span>;
                   })()}
                 </td>
-                <td className="py-2 pr-4 capitalize">{o.status}</td>
+                <td className="py-2 pr-4">
+                  {(() => {
+                    const base = 'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize border ';
+                    const hasReturns = !!(o as any).has_returns;
+                    const cls = hasReturns
+                      ? base + 'bg-red-50 text-red-700 border-red-200'
+                      : base + 'bg-gray-100 text-gray-800 border-gray-200';
+                    return <span className={cls}>{o.status}</span>;
+                  })()}
+                </td>
                 <td className="py-2 pr-4">{Number(o.total).toLocaleString()} PKR</td>
                 <td className="py-2 pr-4">{Number((o as any).amount_due || 0).toLocaleString()} PKR</td>
                 <td className="py-2 pr-4">{new Date(o.created_at).toLocaleString()}</td>

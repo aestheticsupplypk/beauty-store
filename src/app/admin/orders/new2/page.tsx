@@ -3,6 +3,9 @@ import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import { requireAdmin } from '@/lib/auth';
 import { ManualOrderTotalsPreview } from './ManualOrderTotalsPreview';
 
+type ProductRow = { id: string; name: string };
+type VariantRow = { id: string; sku: string | null; product_id: string | null };
+
 export default async function NewManualOrderPage() {
   await requireAdmin();
   const supabase = getSupabaseServerClient();
@@ -14,6 +17,30 @@ export default async function NewManualOrderPage() {
     .from('products')
     .select('id, name')
     .order('name', { ascending: true });
+
+  const { data: variants } = await supabase
+    .from('variants')
+    .select('id, sku, product_id')
+    .order('sku', { ascending: true });
+
+  const productById = new Map<string, ProductRow>();
+  (products || []).forEach((p: any) => {
+    if (p?.id) {
+      productById.set(String(p.id), { id: String(p.id), name: String(p.name || '') });
+    }
+  });
+
+  const variantOptions: { id: string; label: string }[] = [];
+  (variants || []).forEach((v: any) => {
+    const vid = String(v.id || '');
+    const pid = v.product_id ? String(v.product_id) : '';
+    if (!vid || !pid) return;
+    const product = productById.get(pid);
+    const sku = v.sku ? String(v.sku) : '';
+    const name = product?.name || 'Unknown product';
+    const label = sku ? `${name} — ${sku}` : name;
+    variantOptions.push({ id: vid, label });
+  });
 
   return (
     <div className="space-y-6">
@@ -237,9 +264,32 @@ export default async function NewManualOrderPage() {
                       defaultValue=""
                     >
                       <option value="">Select product (optional)</option>
-                      {(products || []).map((p) => (
+                      {(products || []).map((p: any) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm">
+                      Variant / SKU (optional)
+                      <span
+                        className="ml-1 inline-flex h-3 w-3 items-center justify-center rounded-full border text-[9px] text-gray-600 cursor-help"
+                        title="Choose the specific variant / SKU for inventory tracking. Only lines with a variant will adjust stock."
+                      >
+                        ?
+                      </span>
+                    </label>
+                    <select
+                      name={`items[${i}][variant_id]`}
+                      className="border rounded px-3 py-2 w-full bg-white"
+                      defaultValue=""
+                    >
+                      <option value="">Select variant (optional)</option>
+                      {variantOptions.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.label}
                         </option>
                       ))}
                     </select>
