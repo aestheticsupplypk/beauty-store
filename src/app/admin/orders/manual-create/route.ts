@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 
 function parseIntOrZero(v: FormDataEntryValue | null): number {
@@ -22,7 +22,7 @@ function makePrefix(source: string, length: number): string {
 }
 
 export async function POST(req: Request) {
-  await requireAdmin();
+  await requireSectionAccess('orders');
   const supabase = getSupabaseServerClient();
 
   const formData = await req.formData();

@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import Link from 'next/link';
 
@@ -96,7 +96,7 @@ async function fetchOrders(search: Search) {
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams: Search }) {
-  await requireAdmin();
+  await requireSectionAccess('orders');
   const supabase = getSupabaseServerClient();
   let orders: any[] = [];
   let fetchError: any = null;

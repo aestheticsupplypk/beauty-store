@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
-import { requireAdmin } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import { ManualOrderTotalsPreview } from './ManualOrderTotalsPreview';
 
 type ProductRow = { id: string; name: string };
 type VariantRow = { id: string; sku: string | null; product_id: string | null };
 
 export default async function NewManualOrderPage() {
-  await requireAdmin();
+  await requireSectionAccess('orders');
   const supabase = getSupabaseServerClient();
   const { data: provinces } = await supabase
     .from('provinces')

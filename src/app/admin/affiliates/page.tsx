@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 
 async function fetchAffiliatesWithStats() {
@@ -40,7 +40,7 @@ async function fetchAffiliatesWithStats() {
 }
 
 export default async function AdminAffiliatesPage() {
-  await requireAdmin();
+  await requireSectionAccess('affiliates');
   const rows = await fetchAffiliatesWithStats();
 
   return (

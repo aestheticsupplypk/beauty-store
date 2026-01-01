@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 
 async function fetchOrderForSlip(id: string) {
@@ -22,7 +22,7 @@ async function fetchOrderForSlip(id: string) {
 }
 
 export default async function PackingSlipPage({ params }: { params: { id: string } }) {
-  await requireAdmin();
+  await requireSectionAccess('orders');
   const id = params.id;
   const result = await fetchOrderForSlip(id);
 

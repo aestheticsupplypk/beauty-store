@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import RowEditor from './row-editor';
 
@@ -31,7 +31,7 @@ async function getRows(productId?: string) {
 }
 
 export default async function InventoryPage({ searchParams }: { searchParams?: { productId?: string } }) {
-  await requireAdmin();
+  await requireSectionAccess('inventory');
   const currentProduct = searchParams?.productId ?? 'all';
   const rows = await getRows(currentProduct);
   const supabase = getSupabaseServerClient();

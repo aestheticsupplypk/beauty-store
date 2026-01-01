@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/auth';
+import { requireAdmin, requireSectionAccess } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
@@ -126,7 +126,7 @@ async function addPayment(formData: FormData) {
 
 async function returnLineAction(formData: FormData) {
   'use server';
-  await requireAdmin();
+  await requireSectionAccess('orders');
 
   const orderId = String(formData.get('order_id') || '');
   const lineId = String(formData.get('line_id') || '');
@@ -207,7 +207,7 @@ async function returnLineAction(formData: FormData) {
 }
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
-  await requireAdmin();
+  await requireSectionAccess('orders');
   const id = params.id;
   const result = await fetchOrder(id);
 
@@ -470,7 +470,7 @@ async function updateStatusAction(formData: FormData) {
   'use server';
   const id = String(formData.get('id') || '');
   const status = String(formData.get('status') || '');
-  await requireAdmin();
+  await requireSectionAccess('orders');
 
   if (!id || !status) {
     return { ok: false, message: 'Missing id or status' } as const;

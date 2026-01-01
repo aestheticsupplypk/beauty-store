@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
 
@@ -56,7 +56,7 @@ async function fetchReviews(search: Search) {
 
 async function updateReviewStatus(formData: FormData) {
   'use server';
-  await requireAdmin();
+  await requireSectionAccess('reviews');
   const id = String(formData.get('id') || '');
   const to = String(formData.get('status') || '');
   if (!id || !['pending','approved','rejected'].includes(to)) {
@@ -74,7 +74,7 @@ async function updateReviewStatus(formData: FormData) {
 }
 
 export default async function AdminReviewsPage({ searchParams }: { searchParams: Search }) {
-  await requireAdmin();
+  await requireSectionAccess('reviews');
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
   const svc = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
   const supabase = createClient(url, svc);
