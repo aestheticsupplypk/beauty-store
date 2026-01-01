@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSessionAndProfile } from '@/lib/auth';
+import { requireSectionAccess } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 
 /* Admin-only endpoint to create an order manually (e.g., phone order).
@@ -18,10 +18,7 @@ Expected payload (JSON):
 */
 export async function POST(req: Request) {
   try {
-    const { profile } = await getSessionAndProfile();
-    if (!profile?.is_admin) {
-      return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
-    }
+    await requireSectionAccess('orders');
     const supabase = getSupabaseServerClient();
     const body = await req.json();
 
