@@ -43,7 +43,9 @@ async function updateParlour(formData: FormData) {
 
   const id = String(formData.get('id') || '');
   const name = String(formData.get('name') || '').trim();
+  const address = String(formData.get('address') || '').trim();
   const city = String(formData.get('city') || '').trim();
+  const province_code = String(formData.get('province_code') || '').trim();
   const phone = String(formData.get('phone') || '').trim();
   const email = String(formData.get('email') || '').trim();
   const minOrderQty = formData.get('min_order_qty') ? Number(formData.get('min_order_qty')) : null;
@@ -56,7 +58,9 @@ async function updateParlour(formData: FormData) {
     .from('parlours')
     .update({
       name,
+      address: address || null,
       city: city || null,
+      province_code: province_code || null,
       phone: phone || null,
       email: email || null,
       min_order_qty: minOrderQty,
@@ -171,15 +175,6 @@ export default async function EditParlourPage({ params }: { params: { id: string
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">City</label>
-              <input
-                type="text"
-                name="city"
-                defaultValue={parlour.city || ''}
-                className="w-full border rounded px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
               <label className="block text-sm font-medium mb-1">Phone</label>
               <input
                 type="text"
@@ -196,6 +191,42 @@ export default async function EditParlourPage({ params }: { params: { id: string
                 defaultValue={parlour.email || ''}
                 className="w-full border rounded px-3 py-2 text-sm"
               />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">Address</label>
+              <input
+                type="text"
+                name="address"
+                defaultValue={parlour.address || ''}
+                className="w-full border rounded px-3 py-2 text-sm"
+                placeholder="Street address"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">City</label>
+              <input
+                type="text"
+                name="city"
+                defaultValue={parlour.city || ''}
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Province</label>
+              <select
+                name="province_code"
+                defaultValue={parlour.province_code || ''}
+                className="w-full border rounded px-3 py-2 text-sm"
+              >
+                <option value="">Select province</option>
+                <option value="PB">Punjab</option>
+                <option value="SD">Sindh</option>
+                <option value="KP">Khyber Pakhtunkhwa</option>
+                <option value="BL">Balochistan</option>
+                <option value="GB">Gilgit-Baltistan</option>
+                <option value="AK">Azad Kashmir</option>
+                <option value="IS">Islamabad</option>
+              </select>
             </div>
           </div>
 
