@@ -8,7 +8,8 @@ export type AdminSection =
   | 'products'
   | 'reviews'
   | 'shipping'
-  | 'affiliates';
+  | 'affiliates'
+  | 'parlours';
 
 export async function getSessionAndProfile() {
   const supabase = getSupabaseServerClient();
@@ -33,6 +34,7 @@ export async function getSessionAndProfile() {
         'can_admin_reviews',
         'can_admin_shipping',
         'can_admin_affiliates',
+        'can_admin_parlours',
       ].join(', ')
     )
     .eq('id', session.user.id)
@@ -75,6 +77,7 @@ export async function requireSectionAccess(section: AdminSection) {
     reviews: Boolean(p.can_admin_reviews),
     shipping: Boolean(p.can_admin_shipping),
     affiliates: Boolean(p.can_admin_affiliates),
+    parlours: Boolean(p.can_admin_parlours),
   }[section];
 
   if (!allowed) {

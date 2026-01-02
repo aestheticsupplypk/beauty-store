@@ -7,7 +7,7 @@ async function fetchProfiles() {
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, is_admin_full, can_admin_dashboard, can_admin_orders, can_admin_inventory, can_admin_products, can_admin_reviews, can_admin_shipping, can_admin_affiliates'
+      'id, email, is_admin_full, can_admin_dashboard, can_admin_orders, can_admin_inventory, can_admin_products, can_admin_reviews, can_admin_shipping, can_admin_affiliates, can_admin_parlours'
     )
     .order('email', { ascending: true });
   if (error) throw error;
@@ -22,6 +22,7 @@ async function fetchProfiles() {
     can_admin_reviews: Boolean(p.can_admin_reviews),
     can_admin_shipping: Boolean(p.can_admin_shipping),
     can_admin_affiliates: Boolean(p.can_admin_affiliates),
+    can_admin_parlours: Boolean(p.can_admin_parlours),
   }));
 }
 

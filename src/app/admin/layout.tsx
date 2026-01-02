@@ -21,6 +21,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const canShipping = isFullAdmin || Boolean(p.can_admin_shipping);
   const canProducts = isFullAdmin || Boolean(p.can_admin_products);
   const canAffiliates = isFullAdmin || Boolean(p.can_admin_affiliates);
+  const canParlours = isFullAdmin || Boolean(p.can_admin_parlours);
 
   return (
     <div className="min-h-screen grid grid-cols-12">
@@ -34,6 +35,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           {canShipping && <Link className="hover:underline" href="/admin/shipping">Shipping</Link>}
           {canProducts && <Link className="hover:underline" href="/admin/products">Products</Link>}
           {canAffiliates && <Link className="hover:underline" href="/admin/affiliates">Affiliates</Link>}
+          {canParlours && <Link className="hover:underline" href="/admin/parlours">Parlours</Link>}
           {isFullAdmin && <Link className="hover:underline" href="/admin/permissions">Admin Permissions</Link>}
         </nav>
         <div className="border-t pt-3 mt-auto">

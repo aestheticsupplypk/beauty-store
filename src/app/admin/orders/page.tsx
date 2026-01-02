@@ -162,6 +162,7 @@ return (
             <option value="all">All</option>
             <option value="manual">Manual</option>
             <option value="online">Web / Online</option>
+            <option value="parlour">Parlour</option>
           </select>
         </div>
         <div>

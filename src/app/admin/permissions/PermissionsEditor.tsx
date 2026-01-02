@@ -14,6 +14,7 @@ type Profile = {
   can_admin_reviews: boolean;
   can_admin_shipping: boolean;
   can_admin_affiliates: boolean;
+  can_admin_parlours: boolean;
 };
 
 type PermissionsEditorProps = {
@@ -29,6 +30,7 @@ const SECTION_KEYS = [
   'can_admin_reviews',
   'can_admin_shipping',
   'can_admin_affiliates',
+  'can_admin_parlours',
 ] as const;
 
 const SECTION_LABELS: Record<string, string> = {
@@ -40,6 +42,7 @@ const SECTION_LABELS: Record<string, string> = {
   can_admin_reviews: 'Reviews',
   can_admin_shipping: 'Shipping',
   can_admin_affiliates: 'Affiliates',
+  can_admin_parlours: 'Parlours',
 };
 
 export default function PermissionsEditor({ initialProfiles }: PermissionsEditorProps) {
@@ -85,6 +88,7 @@ export default function PermissionsEditor({ initialProfiles }: PermissionsEditor
             updated.can_admin_reviews = true;
             updated.can_admin_shipping = true;
             updated.can_admin_affiliates = true;
+            updated.can_admin_parlours = true;
           } else {
             // If toggling Full Admin OFF, just turn off Full Admin
             updated.is_admin_full = false;
@@ -101,7 +105,8 @@ export default function PermissionsEditor({ initialProfiles }: PermissionsEditor
             updated.can_admin_products &&
             updated.can_admin_reviews &&
             updated.can_admin_shipping &&
-            updated.can_admin_affiliates;
+            updated.can_admin_affiliates &&
+            updated.can_admin_parlours;
 
           updated.is_admin_full = allOn;
         }

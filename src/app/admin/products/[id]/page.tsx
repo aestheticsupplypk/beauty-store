@@ -7,6 +7,7 @@
   import RichTextEditor from '@/components/admin/RichTextEditor';
   import { slugify } from '@/lib/slugify';
   import ProductMetaPixelModal from '@/components/admin/ProductMetaPixelModal';
+import ParlourPricingPanel from '@/components/admin/ParlourPricingPanel';
 
 const BUCKET = 'product-media';
 const MAX_IMAGE_MB = 10; // client-side hint, actual limit enforced by storage
@@ -2696,6 +2697,9 @@ export default function EditProductPage() {
           </div>
         </div>
       </section>
+
+      {/* Parlour Pricing Panel */}
+      <ParlourPricingPanel productId={params.id} />
 
       <div className="text-xs text-gray-500">More editors (Options/Variants, Specs, Bottom Sections) will appear here next.</div>
     </div>

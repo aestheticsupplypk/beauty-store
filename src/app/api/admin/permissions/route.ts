@@ -30,6 +30,7 @@ export async function POST(req: Request) {
           can_admin_reviews: Boolean(p.can_admin_reviews),
           can_admin_shipping: Boolean(p.can_admin_shipping),
           can_admin_affiliates: Boolean(p.can_admin_affiliates),
+          can_admin_parlours: Boolean(p.can_admin_parlours),
         })
         .eq('id', p.id);
     }

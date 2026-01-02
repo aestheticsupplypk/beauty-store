@@ -262,6 +262,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
               <div className="text-gray-600">Payment</div>
               <div className="mt-0.5">{paymentBadge(paymentStatus)}</div>
             </div>
+            {(order as any).payment_preference && (
+              <div>
+                <div className="text-gray-600">Payment Method</div>
+                <div className="font-medium capitalize">{(order as any).payment_preference === 'cod' ? 'Cash on Delivery' : 'Advance Payment'}</div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -401,7 +407,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <div className="space-y-4">
           <div className="border rounded p-4 space-y-4">
             <h2 className="font-medium">Update Status</h2>
-            <StatusForm id={String(order.id)} currentStatus={String(order.status)} />
+            <StatusForm id={String(order.id)} currentStatus={String(order.status)} paymentPreference={(order as any).payment_preference} amountPaid={amount_paid} />
 
             <div className="border-t pt-4">
               <h3 className="font-medium mb-2">Actions</h3>
@@ -557,7 +563,9 @@ async function updateStatusAction(formData: FormData) {
   return { ok: true } as const;
 }
 
-function StatusForm({ id, currentStatus }: { id: string; currentStatus: string }) {
+function StatusForm({ id, currentStatus, paymentPreference, amountPaid }: { id: string; currentStatus: string; paymentPreference?: string; amountPaid?: number }) {
+  const showAdvanceWarning = paymentPreference === 'advance' && (amountPaid || 0) === 0;
+  
   return (
     <form action={updateStatusAction} className="space-y-3">
       <input type="hidden" name="id" value={id} />
@@ -570,6 +578,11 @@ function StatusForm({ id, currentStatus }: { id: string; currentStatus: string }
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
+      {showAdvanceWarning && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded text-xs">
+          <span className="font-medium">Warning:</span> This order requires advance payment but no payment has been recorded yet.
+        </div>
+      )}
       <button className="bg-black text-white rounded px-4 py-2">Save</button>
     </form>
   );
