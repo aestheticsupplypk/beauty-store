@@ -37,11 +37,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // Fetch notification counts
   const supabase = getSupabaseServerClient();
   
-  // Pending orders count
-  const { count: pendingOrdersCount } = canOrders 
-    ? await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending')
-    : { count: 0 };
-  
   // Pending parlour registrations count
   const { count: pendingParloursCount } = canParlours
     ? await supabase.from('parlours').select('*', { count: 'exact', head: true }).eq('active', false)
@@ -59,11 +54,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <nav className="flex flex-col gap-2 text-sm">
           {canDashboard && <Link className="hover:underline" href="/admin">Dashboard</Link>}
           {canInventory && <Link className="hover:underline" href="/admin/inventory">Inventory</Link>}
-          {canOrders && (
-            <Link className="hover:underline flex items-center" href="/admin/orders">
-              Orders <Badge count={pendingOrdersCount || 0} />
-            </Link>
-          )}
+          {canOrders && <Link className="hover:underline" href="/admin/orders">Orders</Link>}
           {canReviews && (
             <Link className="hover:underline flex items-center" href="/admin/reviews">
               Reviews <Badge count={pendingReviewsCount || 0} />
