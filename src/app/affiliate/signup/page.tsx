@@ -41,11 +41,9 @@ export default function AffiliateSignupPage() {
       setError("Passwords do not match");
       return;
     }
-    // Simpler, friendlier rule: at least 8 characters, letters and numbers only,
-    // and must contain at least one letter and one number.
-    const simpleRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,20}$/;
-    if (!simpleRegex.test(pwd)) {
-      setError("Password must be 8-20 characters, using letters and numbers with at least one of each");
+    // Simple validation: minimum 6 characters
+    if (pwd.length < 6) {
+      setError("Password must be at least 6 characters");
       return;
     }
 
@@ -224,8 +222,7 @@ export default function AffiliateSignupPage() {
                 name="password"
                 type={showPassword ? "text" : "password"}
                 required
-                minLength={8}
-                maxLength={20}
+                minLength={6}
                 className="border rounded px-3 py-2 w-full pr-10"
                 placeholder="Password"
               />
@@ -237,7 +234,7 @@ export default function AffiliateSignupPage() {
                 👁
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">Use 8-20 characters with letters and numbers.</p>
+            <p className="mt-1 text-xs text-gray-500">Minimum 6 characters.</p>
           </div>
 
           <div>
@@ -247,8 +244,7 @@ export default function AffiliateSignupPage() {
                 name="password_confirm"
                 type={showPassword2 ? "text" : "password"}
                 required
-                minLength={8}
-                maxLength={20}
+                minLength={6}
                 className="border rounded px-3 py-2 w-full pr-10"
               />
               <button
