@@ -197,7 +197,7 @@ export async function POST(req: Request) {
     const { data: orderRow, error: orderErr } = await supabase
       .from('orders')
       .insert({
-        source: 'online',
+        source: 'website',
         status: 'pending',
         payment_status: 'unpaid',
         customer_name: customer.name,
