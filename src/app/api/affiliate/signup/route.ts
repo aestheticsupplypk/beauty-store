@@ -21,9 +21,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
-    if (!strongRegex.test(password)) {
-      return NextResponse.json({ error: 'Password does not meet strength requirements' }, { status: 400 });
+    // Simple validation: minimum 6 characters
+    if (password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
     const makeBaseFromName = (full: string) => {
