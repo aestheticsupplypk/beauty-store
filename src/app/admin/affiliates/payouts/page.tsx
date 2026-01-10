@@ -12,6 +12,8 @@ type Summary = {
 type Batch = {
   id: string;
   batch_date: string;
+  period_start: string;
+  period_end: string;
   total_commissions: number;
   total_affiliates: number;
   status: string;
@@ -58,6 +60,21 @@ export default function AdminPayoutsPage() {
     if (!dateStr) return '—';
     const d = new Date(dateStr);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function formatPeriod(start: string, end: string) {
+    if (!start || !end) return '—';
+    const s = new Date(start);
+    const e = new Date(end);
+    const sMonth = s.toLocaleDateString('en-US', { month: 'short' });
+    const eMonth = e.toLocaleDateString('en-US', { month: 'short' });
+    const sDay = s.getDate();
+    const eDay = e.getDate();
+    
+    if (sMonth === eMonth) {
+      return `${sMonth} ${sDay}–${eDay}`;
+    }
+    return `${sMonth} ${sDay} – ${eMonth} ${eDay}`;
   }
 
   function getStatusBadge(status: string) {
@@ -173,11 +190,11 @@ export default function AdminPayoutsPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Batch Date</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Batch</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Period</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Affiliates</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Created</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600"></th>
               </tr>
             </thead>
@@ -185,10 +202,10 @@ export default function AdminPayoutsPage() {
               {recentBatches.map((batch) => (
                 <tr key={batch.id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium">{formatDate(batch.batch_date)}</td>
-                  <td className="px-4 py-3 text-right">{batch.total_commissions.toLocaleString()} PKR</td>
+                  <td className="px-4 py-3 text-gray-600">{formatPeriod(batch.period_start, batch.period_end)}</td>
                   <td className="px-4 py-3 text-right">{batch.total_affiliates}</td>
+                  <td className="px-4 py-3 text-right font-medium">{batch.total_commissions.toLocaleString()} PKR</td>
                   <td className="px-4 py-3">{getStatusBadge(batch.status)}</td>
-                  <td className="px-4 py-3 text-gray-500">{formatDate(batch.created_at)}</td>
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/affiliates/payouts/${batch.id}`}

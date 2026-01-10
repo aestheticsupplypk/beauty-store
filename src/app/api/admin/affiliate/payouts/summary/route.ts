@@ -40,7 +40,7 @@ export async function GET() {
     // Get recent batches (last 10)
     const { data: recentBatches, error: recentErr } = await supabase
       .from('affiliate_payout_batches')
-      .select('id, batch_date, total_commissions, total_affiliates, status, created_at, processed_at')
+      .select('id, batch_date, period_start, period_end, total_commissions, total_affiliates, status, created_at, processed_at')
       .order('created_at', { ascending: false })
       .limit(10);
 
@@ -75,6 +75,8 @@ export async function GET() {
       recent_batches: (recentBatches || []).map((b: any) => ({
         id: b.id,
         batch_date: b.batch_date,
+        period_start: b.period_start,
+        period_end: b.period_end,
         total_commissions: Number(b.total_commissions || 0),
         total_affiliates: b.total_affiliates,
         status: b.status,
