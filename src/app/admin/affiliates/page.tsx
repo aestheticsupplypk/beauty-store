@@ -49,12 +49,20 @@ export default async function AdminAffiliatesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Affiliates</h1>
-        <Link
-          href="/admin/affiliates/tiers"
-          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium"
-        >
-          Commission Tiers
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/affiliates/payouts"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+          >
+            Payouts
+          </Link>
+          <Link
+            href="/admin/affiliates/tiers"
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium"
+          >
+            Commission Tiers
+          </Link>
+        </div>
       </div>
 
       <p className="text-sm text-gray-600 max-w-2xl">
