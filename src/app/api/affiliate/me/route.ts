@@ -53,7 +53,7 @@ export async function GET() {
 
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
-      .select('id, created_at, total_amount, grand_total, affiliate_commission_amount, customer_name, status, delivered_at')
+      .select('id, created_at, total_amount, grand_total, affiliate_commission_amount, customer_name, status, delivered_at, delivery_status')
       .eq('affiliate_id', affiliateId)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -93,6 +93,36 @@ export async function GET() {
       return s;
     }, 0);
 
+    // Get affiliate's current tier
+    let tierInfo = { tier_name: 'Bronze', delivered_count_30d: 0, next_tier_name: 'Silver', next_tier_threshold: 10 };
+    try {
+      const { data: tierData } = await supabase.rpc('get_affiliate_tier', { p_affiliate_id: affiliateId });
+      if (tierData && tierData.length > 0) {
+        const t = tierData[0];
+        tierInfo.tier_name = t.tier_name || 'Bronze';
+        tierInfo.delivered_count_30d = t.delivered_count_30d || 0;
+        
+        // Get next tier info
+        const { data: allTiers } = await supabase
+          .from('affiliate_tiers')
+          .select('name, min_delivered_orders_30d')
+          .eq('active', true)
+          .gt('min_delivered_orders_30d', tierInfo.delivered_count_30d)
+          .order('min_delivered_orders_30d', { ascending: true })
+          .limit(1);
+        
+        if (allTiers && allTiers.length > 0) {
+          tierInfo.next_tier_name = (allTiers[0] as any).name;
+          tierInfo.next_tier_threshold = (allTiers[0] as any).min_delivered_orders_30d;
+        } else {
+          tierInfo.next_tier_name = null as any;
+          tierInfo.next_tier_threshold = null as any;
+        }
+      }
+    } catch (tierErr) {
+      console.error('[affiliate/me] tier lookup error', tierErr);
+    }
+
     return NextResponse.json({
       ok: true,
       affiliate: {
@@ -112,6 +142,7 @@ export async function GET() {
         pending_commission: pendingCommission,
         payable_commission: payableCommission,
       },
+      tier: tierInfo,
       orders: rows.map((r) => ({
         id: r.id,
         created_at: r.created_at,
@@ -119,6 +150,7 @@ export async function GET() {
         grand_total: Number(r.grand_total || 0),
         affiliate_commission_amount: Number(r.affiliate_commission_amount || 0),
         customer_name: r.customer_name || null,
+        delivery_status: r.delivery_status || null,
       })),
     });
   } catch (e: any) {

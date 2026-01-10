@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import Link from "next/link";
 
 type AffiliateSummary = {
   affiliate: {
@@ -21,6 +22,12 @@ type AffiliateSummary = {
     pending_commission: number;
     payable_commission: number;
   };
+  tier: {
+    tier_name: string;
+    delivered_count_30d: number;
+    next_tier_name: string | null;
+    next_tier_threshold: number | null;
+  };
   orders: Array<{
     id: string;
     created_at: string;
@@ -28,6 +35,7 @@ type AffiliateSummary = {
     grand_total: number;
     affiliate_commission_amount: number;
     customer_name?: string | null;
+    delivery_status?: string | null;
   }>;
 };
 
@@ -41,6 +49,8 @@ export default function AffiliateDashboardPage() {
   const [copied, setCopied] = useState(false);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
   const [copiedInsta, setCopiedInsta] = useState(false);
+  const [statusExpanded, setStatusExpanded] = useState(false);
+  const [showAllOrders, setShowAllOrders] = useState(false);
 
   const getWhatsAppMessage = (code: string) => {
     return `Hi! I'm sharing my personal referral code for Aesthetic Supply PK — Pakistan's trusted beauty supplier for salons and professionals.\n\nUse code: ${code}\n\nYou'll get 10% OFF your first order.\n\nShop here: https://aestheticsupplypk.com\n\nLet me know if you need help choosing products!`;
@@ -139,15 +149,24 @@ export default function AffiliateDashboardPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-5 space-y-5">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">Affiliate Partner Login</h1>
-        <p className="text-sm text-gray-700">
-          Log in to view your referral code, tracked orders, and earnings.
-        </p>
-        <p className="text-xs text-gray-500">
-          Access your affiliate dashboard in one place – no spreadsheets, no manual tracking.
-        </p>
-      </div>
+      {!data ? (
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">Affiliate Partner Login</h1>
+          <p className="text-sm text-gray-700">
+            Log in to view your referral code, tracked orders, and earnings.
+          </p>
+          <p className="text-xs text-gray-500">
+            Access your affiliate dashboard in one place – no spreadsheets, no manual tracking.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">Affiliate Dashboard</h1>
+          <p className="text-sm text-gray-700">
+            Track your orders, commission, and payout status.
+          </p>
+        </div>
+      )}
 
       {!data && checkedSession && (
         <form
@@ -218,41 +237,29 @@ export default function AffiliateDashboardPage() {
       )}
 
       {data && (
-        <div className="space-y-6">
-          {/* Status Banner */}
-          {data.affiliate.status === 'active' && (
-            <div className="border rounded-md bg-emerald-50 border-emerald-200 px-4 py-3 flex items-center gap-2">
-              <span className="text-emerald-600">✅</span>
-              <span className="text-sm font-medium text-emerald-800">Active</span>
-              <span className="text-xs text-emerald-700">— Your referral code is working</span>
-            </div>
-          )}
-          {data.affiliate.status === 'warning' && (
-            <div className="border rounded-md bg-amber-50 border-amber-200 px-4 py-3 flex items-center gap-2">
-              <span className="text-amber-600">⚠️</span>
-              <span className="text-sm font-medium text-amber-800">Warning</span>
-              <span className="text-xs text-amber-700">— {data.affiliate.strike_count} / 5 failed deliveries in last 30 days</span>
-            </div>
-          )}
-          {data.affiliate.status === 'suspended' && (
-            <div className="border rounded-md bg-red-50 border-red-200 px-4 py-3 flex items-center gap-2">
-              <span className="text-red-600">⛔</span>
-              <span className="text-sm font-medium text-red-800">Suspended</span>
-              <span className="text-xs text-red-700">— Affiliate code disabled due to too many failed deliveries</span>
-            </div>
-          )}
-
+        <div className="space-y-5">
+          {/* 1️⃣ Identity + Referral Actions */}
           <div className="border rounded p-4 bg-gray-50 space-y-3">
-            <div className="text-sm text-gray-600">Affiliate</div>
-            <div className="text-lg font-semibold">{data.affiliate.name}</div>
-            {data.affiliate.parlour_name ? (
-              <div className="text-sm text-gray-700">{data.affiliate.parlour_name}</div>
-            ) : null}
-            {data.affiliate.city ? (
-              <div className="text-sm text-gray-500">City: {data.affiliate.city}</div>
-            ) : null}
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-lg font-semibold">{data.affiliate.name}</div>
+                {data.affiliate.city && (
+                  <div className="text-sm text-gray-500">City: {data.affiliate.city}</div>
+                )}
+              </div>
+              <Link
+                href="/affiliate/settings"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Settings
+              </Link>
+            </div>
 
-            <div className="mt-2 rounded-md border border-dashed border-emerald-300 bg-white px-3 py-3 space-y-2">
+            <div className="rounded-md border border-dashed border-emerald-300 bg-white px-3 py-3 space-y-2">
               <div className="text-xs font-medium text-gray-600">Your referral code</div>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="font-mono text-lg font-semibold tracking-[0.35em] text-gray-900">
@@ -265,30 +272,57 @@ export default function AffiliateDashboardPage() {
                       await navigator.clipboard.writeText(data.affiliate.code);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 2000);
-                    } catch {
-                      // ignore clipboard errors
-                    }
+                    } catch {}
                   }}
                   className="inline-flex items-center justify-center rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50"
                 >
                   {copied ? "Copied" : "Copy code"}
                 </button>
               </div>
-              <p className="text-[11px] text-gray-600">
-                Share this code with your clients on WhatsApp or Instagram. They get a discount when they
-                order using your code, and you earn commission on every confirmed order.
-              </p>
             </div>
 
-            {/* Next Step CTA */}
-            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50/50 px-4 py-4 space-y-3">
-              <div>
-                <div className="font-medium text-emerald-800 text-sm">📣 Next step: Share your code</div>
-                <p className="text-xs text-gray-700 mt-1">
-                  Send your referral code to clients on WhatsApp or Instagram. When they order using your code, your commission will appear here automatically.
-                </p>
+            {/* Smart Next Step CTA - collapse after first order */}
+            {data.stats.total_orders === 0 ? (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-4 py-4 space-y-3">
+                <div>
+                  <div className="font-medium text-emerald-800 text-sm">📣 Next step: Share your code</div>
+                  <p className="text-xs text-gray-700 mt-1">
+                    Send your referral code to clients on WhatsApp or Instagram. When they order using your code, your commission will appear here automatically.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(getWhatsAppMessage(data.affiliate.code));
+                        setCopiedWhatsApp(true);
+                        setTimeout(() => setCopiedWhatsApp(false), 2000);
+                      } catch {}
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <span>💬</span>
+                    {copiedWhatsApp ? "Copied!" : "Copy WhatsApp message"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(getInstagramBio(data.affiliate.code));
+                        setCopiedInsta(true);
+                        setTimeout(() => setCopiedInsta(false), 2000);
+                      } catch {}
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded border border-pink-300 bg-white px-3 py-2 text-xs font-medium text-pink-700 hover:bg-pink-50"
+                  >
+                    <span>📷</span>
+                    {copiedInsta ? "Copied!" : "Copy Instagram bio"}
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+            ) : (
+              <div className="flex flex-wrap gap-2 pt-1">
                 <button
                   type="button"
                   onClick={async () => {
@@ -298,10 +332,10 @@ export default function AffiliateDashboardPage() {
                       setTimeout(() => setCopiedWhatsApp(false), 2000);
                     } catch {}
                   }}
-                  className="inline-flex items-center gap-1.5 rounded border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                  className="inline-flex items-center gap-1.5 rounded border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <span>💬</span>
-                  {copiedWhatsApp ? "Copied!" : "Copy WhatsApp message"}
+                  {copiedWhatsApp ? "Copied!" : "WhatsApp"}
                 </button>
                 <button
                   type="button"
@@ -312,15 +346,16 @@ export default function AffiliateDashboardPage() {
                       setTimeout(() => setCopiedInsta(false), 2000);
                     } catch {}
                   }}
-                  className="inline-flex items-center gap-1.5 rounded border border-pink-300 bg-white px-3 py-2 text-xs font-medium text-pink-700 hover:bg-pink-50"
+                  className="inline-flex items-center gap-1.5 rounded border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <span>📷</span>
-                  {copiedInsta ? "Copied!" : "Copy Instagram bio"}
+                  {copiedInsta ? "Copied!" : "Instagram"}
                 </button>
               </div>
-            </div>
+            )}
           </div>
 
+          {/* 2️⃣ Earnings Stats Row */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div className="border rounded p-3 bg-white">
               <div className="text-[10px] uppercase text-gray-500">Total orders</div>
@@ -350,34 +385,123 @@ export default function AffiliateDashboardPage() {
               <div className="text-xl font-semibold mt-1 text-emerald-700">
                 {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
               </div>
-              <div className="text-[9px] text-emerald-600 mt-0.5">Next payout</div>
+              <div className="text-[9px] text-emerald-600 mt-0.5">Included in next payout</div>
             </div>
           </div>
 
-          <div className="border rounded-md bg-emerald-50/70 border-emerald-100 px-4 py-3 text-xs text-gray-800">
-            <span className="font-semibold mr-1">How you earn</span>
-            You earn commission every time a client places an order using your referral code — even on repeat
-            purchases.
+          {/* 3️⃣ Next Payout Line (simple, not a card) */}
+          <div className="text-xs text-gray-500 -mt-2">
+            Next payout: ~10th of next month • Estimated: {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
           </div>
 
-          <div className="border rounded-md bg-gray-50 border-gray-200 px-4 py-3 text-xs text-gray-700">
-            <span className="font-semibold mr-1">Payouts</span>
-            Commissions are paid out once a month, usually around the 10th. Confirmed orders from the previous
-            month are included in that payout.
-          </div>
+          {/* 4️⃣ Status Banner (Collapsed by default) with Tier Badge */}
+          {data.affiliate.status === 'active' && !statusExpanded && (
+            <button
+              onClick={() => setStatusExpanded(true)}
+              className="w-full border rounded-md bg-emerald-50 border-emerald-200 px-4 py-2 flex items-center justify-between hover:bg-emerald-100/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-600">✅</span>
+                <span className="text-sm font-medium text-emerald-800">Active</span>
+                <span className="text-xs text-gray-500">•</span>
+                <span className="text-xs font-medium text-gray-600">
+                  {data.tier?.tier_name || 'Bronze'}
+                  {data.tier?.next_tier_name && (
+                    <span className="text-gray-400 font-normal ml-1">
+                      ({data.tier.delivered_count_30d}/{data.tier.next_tier_threshold} to {data.tier.next_tier_name})
+                    </span>
+                  )}
+                </span>
+              </div>
+              <span className="text-xs text-emerald-600">View details →</span>
+            </button>
+          )}
+          {data.affiliate.status === 'warning' && (
+            <div className="border rounded-md bg-amber-50 border-amber-200 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-600">⚠️</span>
+                  <span className="text-sm font-medium text-amber-800">Warning</span>
+                  <span className="text-xs text-amber-700">— {data.affiliate.strike_count}/5 strikes</span>
+                </div>
+                <button
+                  onClick={() => setStatusExpanded(!statusExpanded)}
+                  className="text-xs text-amber-600 hover:text-amber-700"
+                >
+                  {statusExpanded ? 'Hide' : 'Details'}
+                </button>
+              </div>
+              {statusExpanded && (
+                <div className="mt-3 pt-3 border-t border-amber-200 text-xs text-amber-700 space-y-1">
+                  <p>You have {data.affiliate.strike_count} failed deliveries in the last 30 days.</p>
+                  <p>At 5 strikes, your referral code will be automatically suspended.</p>
+                  <p className="text-amber-600">Strikes expire automatically after 30 days.</p>
+                </div>
+              )}
+            </div>
+          )}
+          {data.affiliate.status === 'suspended' && (
+            <div className="border rounded-md bg-red-50 border-red-200 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-red-600">⛔</span>
+                <span className="text-sm font-medium text-red-800">Suspended</span>
+                <span className="text-xs text-red-700">— Referral code disabled</span>
+              </div>
+              <p className="mt-2 text-xs text-red-600">
+                Your affiliate code has been suspended due to too many failed deliveries. Contact support for assistance.
+              </p>
+            </div>
+          )}
 
+          {/* Expanded status details for active */}
+          {data.affiliate.status === 'active' && statusExpanded && (
+            <div className="border rounded-md bg-emerald-50 border-emerald-200 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-600">✅</span>
+                  <span className="text-sm font-medium text-emerald-800">Active</span>
+                  <span className="text-xs text-emerald-700">— Your referral code is working</span>
+                </div>
+                <button
+                  onClick={() => setStatusExpanded(false)}
+                  className="text-xs text-emerald-600 hover:text-emerald-700"
+                >
+                  Hide
+                </button>
+              </div>
+              <div className="mt-3 pt-3 border-t border-emerald-200 text-xs text-emerald-700 space-y-2">
+                <p><strong>Tier:</strong> {data.tier?.tier_name || 'Bronze'}</p>
+                <p><strong>Delivered orders (last 30 days):</strong> {data.tier?.delivered_count_30d || 0}</p>
+                {data.tier?.next_tier_name && (
+                  <p><strong>Next tier:</strong> {data.tier.next_tier_name} at {data.tier.next_tier_threshold} delivered orders</p>
+                )}
+                <p><strong>Strike count:</strong> {data.affiliate.strike_count}/5</p>
+                <p className="text-emerald-600 pt-1">Your commission increases as you deliver more orders.</p>
+              </div>
+            </div>
+          )}
+
+          {/* 5️⃣ Recent Orders (Last 3 only) */}
           <div className="border rounded p-4 bg-white">
-            <h2 className="font-medium mb-3">Recent orders</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-medium">Recent orders</h2>
+              {data.orders.length > 0 && (
+                <Link
+                  href="/affiliate/orders"
+                  className="text-xs text-emerald-600 hover:text-emerald-700"
+                >
+                  View all orders →
+                </Link>
+              )}
+            </div>
             {data.orders.length === 0 ? (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <p className="text-sm text-gray-800 font-medium">You don't have any orders yet.</p>
                   <p className="text-sm text-gray-600">
                     Share your referral code with clients on WhatsApp or Instagram to start earning.
-                    Your first order will appear here once it's confirmed.
                   </p>
                 </div>
-                {/* Visual example row */}
                 <div className="border border-dashed border-gray-200 rounded p-3 bg-gray-50/50">
                   <div className="text-xs text-gray-400 mb-2">Example of how orders will appear:</div>
                   <div className="flex flex-wrap gap-4 text-sm text-gray-400">
@@ -390,39 +514,49 @@ export default function AffiliateDashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs uppercase text-gray-500">
-                      <th className="py-2 pr-4">Date</th>
-                      <th className="py-2 pr-4">Order ID</th>
-                      <th className="py-2 pr-4">Customer</th>
-                      <th className="py-2 pr-4 text-right">Customer subtotal</th>
-                      <th className="py-2 pr-4 text-right">Commission</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.orders.map((o) => (
-                      <tr key={o.id} className="border-b last:border-0">
-                        <td className="py-2 pr-4 whitespace-nowrap">
-                          {new Date(o.created_at as any).toLocaleString()}
-                        </td>
-                        <td className="py-2 pr-4">#{o.id}</td>
-                        <td className="py-2 pr-4">
-                          {o.customer_name || "Customer"}
-                        </td>
-                        <td className="py-2 pr-4 text-right">
-                          {Number(o.total_amount || 0).toLocaleString()} PKR
-                        </td>
-                        <td className="py-2 pr-4 text-right">
-                          {Number(o.affiliate_commission_amount || 0).toLocaleString()} PKR
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-2">
+                {data.orders.slice(0, 3).map((o) => (
+                  <div key={o.id} className="flex items-center justify-between py-2 border-b last:border-0 text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-500">#{String(o.id).slice(-6)}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        o.delivery_status === 'delivered' 
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : o.delivery_status === 'failed'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {o.delivery_status || 'Pending'}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">
+                        {Number(o.affiliate_commission_amount || 0).toLocaleString()} PKR
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
+          </div>
+
+          {/* 6️⃣ Footer Links */}
+          <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-2">
+            <Link href="/affiliate/orders" className="hover:text-emerald-600">
+              View All Orders
+            </Link>
+            <span>•</span>
+            <Link href="/affiliate/settings" className="hover:text-emerald-600">
+              Account Settings
+            </Link>
+            <span>•</span>
+            <Link href="/affiliate/terms" className="hover:text-emerald-600">
+              Terms & Conditions
+            </Link>
+            <span>•</span>
+            <a href="https://wa.me/923001234567" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
+              Contact Support
+            </a>
           </div>
         </div>
       )}
