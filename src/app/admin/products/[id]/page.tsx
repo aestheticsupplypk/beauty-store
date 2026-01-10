@@ -1625,12 +1625,15 @@ export default function EditProductPage() {
         <p className="text-xs text-gray-600 max-w-2xl">
           Configure how much discount customers get and how much commission affiliates earn when a valid referral code is used for this product. Values apply per unit, based on the listed online price (e.g. 3,500 PKR), before shipping.
         </p>
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 max-w-2xl">
+          <strong>Note:</strong> Changes apply to new orders only. Existing orders keep the commission/discount snapshot stored at checkout.
+        </p>
 
         <div className="grid md:grid-cols-2 gap-6 text-sm">
           {/* Customer discount */}
           <div className="space-y-2">
             <h3 className="font-medium flex items-center gap-2">
-              Customer discount
+              Customer Discount <span className="text-xs font-normal text-gray-500">(Commission Schedule)</span>
               <HelpTip>
                 Optional discount applied to the product price when the customer enters a valid referral code. You can set it as a percentage of the listed price or a fixed PKR amount per unit.
               </HelpTip>
@@ -1669,7 +1672,7 @@ export default function EditProductPage() {
           {/* Affiliate commission */}
           <div className="space-y-2">
             <h3 className="font-medium flex items-center gap-2">
-              Affiliate commission
+              Affiliate Commission <span className="text-xs font-normal text-gray-500">(Commission Schedule)</span>
               <HelpTip>
                 Commission paid to the affiliate per unit sold via their code. Always calculated on the listed online price, not the discounted price.
               </HelpTip>

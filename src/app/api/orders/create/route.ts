@@ -59,14 +59,18 @@ export async function POST(req: Request) {
     if (rawRef) {
       const { data: aff, error: affErr } = await supabase
         .from('affiliates')
-        .select('id, code, active')
+        .select('id, code, active, status')
         .eq('code', rawRef)
         .maybeSingle();
       if (affErr) {
         console.error('[orders/create] affiliate lookup error', affErr.message);
-      } else if (aff && (aff as any).active) {
-        affiliateId = String((aff as any).id);
-        affiliateRefCode = String((aff as any).code || rawRef);
+      } else if (aff) {
+        const affStatus = (aff as any).status || 'active';
+        const isActive = (aff as any).active && affStatus !== 'suspended' && affStatus !== 'revoked';
+        if (isActive) {
+          affiliateId = String((aff as any).id);
+          affiliateRefCode = String((aff as any).code || rawRef);
+        }
       }
     }
 
@@ -130,9 +134,42 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3) Build order_lines + compute discounted subtotal and total commission
+    // 3) Fetch affiliate tier (if affiliate present)
+    let tierMultiplier = 100; // Default 100% (no change)
+    let tierId: string | null = null;
+    let tierName: string | null = null;
+
+    if (affiliateId) {
+      // Get affiliate's delivered order count in last 30 days
+      const { data: tierData, error: tierErr } = await supabase.rpc('get_affiliate_tier', { p_affiliate_id: affiliateId });
+      
+      if (!tierErr && tierData && tierData.length > 0) {
+        const t = tierData[0];
+        tierId = t.tier_id || null;
+        tierName = t.tier_name || null;
+        tierMultiplier = t.multiplier_percent || 100;
+        console.log(`[orders/create] Affiliate ${affiliateId} tier: ${tierName} (${tierMultiplier}%), delivered_30d: ${t.delivered_count_30d}`);
+      } else {
+        // Fallback: try to get default tier (min_delivered_orders_30d = 0)
+        const { data: defaultTier } = await supabase
+          .from('affiliate_tiers')
+          .select('id, name, multiplier_percent')
+          .eq('active', true)
+          .eq('min_delivered_orders_30d', 0)
+          .maybeSingle();
+        
+        if (defaultTier) {
+          tierId = (defaultTier as any).id;
+          tierName = (defaultTier as any).name;
+          tierMultiplier = (defaultTier as any).multiplier_percent || 100;
+        }
+      }
+    }
+
+    // 4) Build order_lines + compute discounted subtotal and total commission
     const linePayload: Array<{ order_id?: string; variant_id: string; qty: number; unit_price: number; line_total: number }> = [];
     let itemsSubtotalCustomer = 0;
+    let totalBaseCommission = 0;
     let totalCommission = 0;
 
     for (const it of items) {
@@ -166,6 +203,9 @@ export async function POST(req: Request) {
         } else if (cType === 'fixed' && cVal > 0) {
           commissionPerUnit = cVal;
         }
+        
+        // Apply tier multiplier to commission
+        commissionPerUnit = commissionPerUnit * (tierMultiplier / 100);
       }
 
       if (discountPerUnit > baseUnit) {
@@ -174,9 +214,11 @@ export async function POST(req: Request) {
 
       const effectiveUnit = baseUnit - discountPerUnit;
       const lineCustomerTotal = effectiveUnit * qty;
+      const lineBaseCommission = commissionPerUnit * qty / (tierMultiplier / 100); // Base before multiplier
       const lineCommission = commissionPerUnit * qty;
 
       itemsSubtotalCustomer += lineCustomerTotal;
+      totalBaseCommission += lineBaseCommission;
       totalCommission += lineCommission;
 
       linePayload.push({
@@ -193,7 +235,12 @@ export async function POST(req: Request) {
 
     const grandTotal = itemsSubtotalCustomer + shippingAmount;
 
-    // 4) Insert into orders
+    // Build commission rule summary for audit trail
+    const commissionRule = affiliateId && totalCommission > 0
+      ? `base ${totalBaseCommission.toFixed(2)} × tier ${tierMultiplier}% = ${totalCommission.toFixed(2)}`
+      : null;
+
+    // 5) Insert into orders
     const { data: orderRow, error: orderErr } = await supabase
       .from('orders')
       .insert({
@@ -212,6 +259,11 @@ export async function POST(req: Request) {
         affiliate_id: affiliateId,
         affiliate_ref_code: affiliateId ? affiliateRefCode : null,
         affiliate_commission_amount: affiliateId ? totalCommission : 0,
+        affiliate_tier_id: affiliateId ? tierId : null,
+        affiliate_tier_name: affiliateId ? tierName : null,
+        affiliate_tier_multiplier: affiliateId ? tierMultiplier : null,
+        affiliate_base_commission: affiliateId ? totalBaseCommission : null,
+        affiliate_commission_rule: commissionRule,
       })
       .select('id')
       .maybeSingle();

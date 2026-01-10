@@ -25,7 +25,7 @@ export async function GET() {
 
     const { data: affiliate, error: affErr } = await supabase
       .from('affiliates')
-      .select('id, name, parlour_name, city, code, active, email')
+      .select('id, name, parlour_name, city, code, active, email, status, strike_count, commission_rate')
       .ilike('email', email)
       .maybeSingle();
 
@@ -36,7 +36,16 @@ export async function GET() {
     if (!affiliate) {
       return NextResponse.json({ error: 'Affiliate profile not found for this account' }, { status: 404 });
     }
-    if (!(affiliate as any).active) {
+    const affiliateStatus = (affiliate as any).status || 'active';
+    
+    // Check if affiliate can access dashboard based on status
+    if (affiliateStatus === 'revoked') {
+      return NextResponse.json({ error: 'Affiliate account has been permanently revoked' }, { status: 403 });
+    }
+    if (affiliateStatus === 'suspended') {
+      return NextResponse.json({ error: 'Affiliate account is suspended due to too many failed deliveries' }, { status: 403 });
+    }
+    if (!(affiliate as any).active && affiliateStatus !== 'warning') {
       return NextResponse.json({ error: 'Affiliate account is not active' }, { status: 403 });
     }
 
@@ -44,7 +53,7 @@ export async function GET() {
 
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
-      .select('id, created_at, total_amount, grand_total, affiliate_commission_amount, customer_name')
+      .select('id, created_at, total_amount, grand_total, affiliate_commission_amount, customer_name, status, delivered_at')
       .eq('affiliate_id', affiliateId)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -58,6 +67,31 @@ export async function GET() {
     const totalOrders = rows.length;
     const totalSales = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
     const totalCommission = rows.reduce((s, r) => s + Number(r.affiliate_commission_amount || 0), 0);
+    
+    // Calculate pending commission: orders delivered but within 10 days (not yet payable)
+    const now = new Date();
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+    const pendingCommission = rows.reduce((s, r) => {
+      // If delivered but delivered_at is within last 10 days, it's pending
+      if (r.status === 'delivered' && r.delivered_at) {
+        const deliveredDate = new Date(r.delivered_at);
+        if (deliveredDate > tenDaysAgo) {
+          return s + Number(r.affiliate_commission_amount || 0);
+        }
+      }
+      return s;
+    }, 0);
+
+    // Calculate payable commission (delivered > 10 days ago, not yet paid)
+    const payableCommission = rows.reduce((s, r) => {
+      if (r.status === 'delivered' && r.delivered_at) {
+        const deliveredDate = new Date(r.delivered_at);
+        if (deliveredDate <= tenDaysAgo) {
+          return s + Number(r.affiliate_commission_amount || 0);
+        }
+      }
+      return s;
+    }, 0);
 
     return NextResponse.json({
       ok: true,
@@ -67,11 +101,16 @@ export async function GET() {
         parlour_name: (affiliate as any).parlour_name,
         city: (affiliate as any).city,
         code: (affiliate as any).code,
+        status: affiliateStatus,
+        strike_count: (affiliate as any).strike_count || 0,
+        commission_rate: (affiliate as any).commission_rate || 0.10,
       },
       stats: {
         total_orders: totalOrders,
         total_sales: totalSales,
         total_commission: totalCommission,
+        pending_commission: pendingCommission,
+        payable_commission: payableCommission,
       },
       orders: rows.map((r) => ({
         id: r.id,

@@ -10,11 +10,16 @@ type AffiliateSummary = {
     parlour_name?: string | null;
     city?: string | null;
     code: string;
+    status: 'active' | 'warning' | 'suspended' | 'revoked';
+    strike_count: number;
+    commission_rate: number;
   };
   stats: {
     total_orders: number;
     total_sales: number;
     total_commission: number;
+    pending_commission: number;
+    payable_commission: number;
   };
   orders: Array<{
     id: string;
@@ -34,6 +39,16 @@ export default function AffiliateDashboardPage() {
   const [data, setData] = useState<AffiliateSummary | null>(null);
   const [checkedSession, setCheckedSession] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
+  const [copiedInsta, setCopiedInsta] = useState(false);
+
+  const getWhatsAppMessage = (code: string) => {
+    return `Hi! I'm sharing my personal referral code for Aesthetic Supply PK — Pakistan's trusted beauty supplier for salons and professionals.\n\nUse code: ${code}\n\nYou'll get 10% OFF your first order.\n\nShop here: https://aestheticsupplypk.com\n\nLet me know if you need help choosing products!`;
+  };
+
+  const getInstagramBio = (code: string) => {
+    return `Shop professional beauty products\nUse code ${code} for 10% off\naestheticsupplypk.com`;
+  };
 
   const loadForCurrentUser = async (opts?: { fromLogin?: boolean }) => {
     const fromLogin = opts?.fromLogin === true;
@@ -54,10 +69,15 @@ export default function AffiliateDashboardPage() {
         if (fromLogin) {
           // After a deliberate login attempt, show a clear, calm message.
           setError(
-            "We couldnt find an affiliate account linked to this email. Please make sure you signed up as an affiliate, or create a new account below."
+            "We couldn't find an affiliate account linked to this email. Please make sure you signed up as an affiliate, or create a new account below."
           );
         }
         // Whether or not we show the message, there is no affiliate data to display.
+        setData(null);
+      } else if (msg.includes("not active")) {
+        setError(
+          "Your affiliate account is pending approval. You will receive a WhatsApp message once approved (usually within 24 hours). Please check back later."
+        );
         setData(null);
       } else {
         setError(raw);
@@ -199,6 +219,29 @@ export default function AffiliateDashboardPage() {
 
       {data && (
         <div className="space-y-6">
+          {/* Status Banner */}
+          {data.affiliate.status === 'active' && (
+            <div className="border rounded-md bg-emerald-50 border-emerald-200 px-4 py-3 flex items-center gap-2">
+              <span className="text-emerald-600">✅</span>
+              <span className="text-sm font-medium text-emerald-800">Active</span>
+              <span className="text-xs text-emerald-700">— Your referral code is working</span>
+            </div>
+          )}
+          {data.affiliate.status === 'warning' && (
+            <div className="border rounded-md bg-amber-50 border-amber-200 px-4 py-3 flex items-center gap-2">
+              <span className="text-amber-600">⚠️</span>
+              <span className="text-sm font-medium text-amber-800">Warning</span>
+              <span className="text-xs text-amber-700">— {data.affiliate.strike_count} / 5 failed deliveries in last 30 days</span>
+            </div>
+          )}
+          {data.affiliate.status === 'suspended' && (
+            <div className="border rounded-md bg-red-50 border-red-200 px-4 py-3 flex items-center gap-2">
+              <span className="text-red-600">⛔</span>
+              <span className="text-sm font-medium text-red-800">Suspended</span>
+              <span className="text-xs text-red-700">— Affiliate code disabled due to too many failed deliveries</span>
+            </div>
+          )}
+
           <div className="border rounded p-4 bg-gray-50 space-y-3">
             <div className="text-sm text-gray-600">Affiliate</div>
             <div className="text-lg font-semibold">{data.affiliate.name}</div>
@@ -236,24 +279,78 @@ export default function AffiliateDashboardPage() {
                 order using your code, and you earn commission on every confirmed order.
               </p>
             </div>
+
+            {/* Next Step CTA */}
+            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50/50 px-4 py-4 space-y-3">
+              <div>
+                <div className="font-medium text-emerald-800 text-sm">📣 Next step: Share your code</div>
+                <p className="text-xs text-gray-700 mt-1">
+                  Send your referral code to clients on WhatsApp or Instagram. When they order using your code, your commission will appear here automatically.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(getWhatsAppMessage(data.affiliate.code));
+                      setCopiedWhatsApp(true);
+                      setTimeout(() => setCopiedWhatsApp(false), 2000);
+                    } catch {}
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                >
+                  <span>💬</span>
+                  {copiedWhatsApp ? "Copied!" : "Copy WhatsApp message"}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(getInstagramBio(data.affiliate.code));
+                      setCopiedInsta(true);
+                      setTimeout(() => setCopiedInsta(false), 2000);
+                    } catch {}
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded border border-pink-300 bg-white px-3 py-2 text-xs font-medium text-pink-700 hover:bg-pink-50"
+                >
+                  <span>📷</span>
+                  {copiedInsta ? "Copied!" : "Copy Instagram bio"}
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="border rounded p-4 bg-white">
-              <div className="text-xs uppercase text-gray-500">Total orders</div>
-              <div className="text-2xl font-semibold mt-1">{data.stats.total_orders}</div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="border rounded p-3 bg-white">
+              <div className="text-[10px] uppercase text-gray-500">Total orders</div>
+              <div className="text-xl font-semibold mt-1">{data.stats.total_orders}</div>
             </div>
-            <div className="border rounded p-4 bg-white">
-              <div className="text-xs uppercase text-gray-500">Total sales</div>
-              <div className="text-2xl font-semibold mt-1">
+            <div className="border rounded p-3 bg-white">
+              <div className="text-[10px] uppercase text-gray-500">Total sales</div>
+              <div className="text-xl font-semibold mt-1">
                 {Number(data.stats.total_sales || 0).toLocaleString()} PKR
               </div>
             </div>
-            <div className="border rounded p-4 bg-white">
-              <div className="text-xs uppercase text-gray-500">Total commission earned</div>
-              <div className="text-2xl font-semibold mt-1 text-emerald-700">
+            <div className="border rounded p-3 bg-white">
+              <div className="text-[10px] uppercase text-gray-500">Earned</div>
+              <div className="text-xl font-semibold mt-1 text-emerald-700">
                 {Number(data.stats.total_commission || 0).toLocaleString()} PKR
               </div>
+            </div>
+            <div className="border rounded p-3 bg-white">
+              <div className="text-[10px] uppercase text-gray-500">Pending</div>
+              <div className="text-xl font-semibold mt-1 text-amber-600">
+                {Number(data.stats.pending_commission || 0).toLocaleString()} PKR
+              </div>
+              <div className="text-[9px] text-gray-400 mt-0.5">10-day hold</div>
+            </div>
+            <div className="border rounded p-3 bg-white border-emerald-200 bg-emerald-50/30">
+              <div className="text-[10px] uppercase text-emerald-700">Payable</div>
+              <div className="text-xl font-semibold mt-1 text-emerald-700">
+                {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
+              </div>
+              <div className="text-[9px] text-emerald-600 mt-0.5">Next payout</div>
             </div>
           </div>
 
@@ -272,11 +369,26 @@ export default function AffiliateDashboardPage() {
           <div className="border rounded p-4 bg-white">
             <h2 className="font-medium mb-3">Recent orders</h2>
             {data.orders.length === 0 ? (
-              <p className="text-sm text-gray-600">
-                You haven&apos;t earned commission yet. Start by sharing your referral code with your clients on
-                WhatsApp or Instagram. When they order using your code, their orders and commission will appear
-                here, and your earnings will be included in the next monthly payout (around the 10th).
-              </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-800 font-medium">You don't have any orders yet.</p>
+                  <p className="text-sm text-gray-600">
+                    Share your referral code with clients on WhatsApp or Instagram to start earning.
+                    Your first order will appear here once it's confirmed.
+                  </p>
+                </div>
+                {/* Visual example row */}
+                <div className="border border-dashed border-gray-200 rounded p-3 bg-gray-50/50">
+                  <div className="text-xs text-gray-400 mb-2">Example of how orders will appear:</div>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-400">
+                    <span>Order #12345</span>
+                    <span>—</span>
+                    <span>Delivered</span>
+                    <span>—</span>
+                    <span className="text-amber-500">Commission pending</span>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">

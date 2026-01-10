@@ -26,6 +26,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
+    // Check if email already exists in affiliates table
+    const { data: existingAffiliate } = await supabase
+      .from('affiliates')
+      .select('id, code')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (existingAffiliate) {
+      return NextResponse.json(
+        { error: 'An affiliate account with this email already exists. Please log in instead.' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user exists in Auth but not in affiliates (orphaned auth user)
+    const { data: authUsers } = await (supabase as any).auth.admin.listUsers();
+    const existingAuthUser = authUsers?.users?.find(
+      (u: any) => u.email?.toLowerCase() === email.toLowerCase()
+    );
+
     const makeBaseFromName = (full: string) => {
       const firstPart = full.split(/\s+/).filter(Boolean)[0] || full;
       const lettersOnly = firstPart.replace(/[^A-Za-z]/g, '').toUpperCase();
@@ -55,25 +75,74 @@ export async function POST(req: Request) {
 
     const code = await generateUniqueCode();
 
-    // Create Supabase auth user for this affiliate
-    const { data: userRes, error: userErr } = await (supabase as any).auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
-    if (userErr) {
-      console.error("Error creating auth user", userErr.message);
+    // If user exists in Auth but not in affiliates, reuse that auth user
+    let authUserId: string | null = null;
+    
+    if (existingAuthUser) {
+      // User exists in Auth but not in affiliates - update their password and reuse
+      authUserId = existingAuthUser.id;
+      console.log(`Reusing existing auth user ${authUserId} for affiliate signup`);
+      
+      // Update the password for the existing auth user
+      const { error: updateErr } = await (supabase as any).auth.admin.updateUserById(authUserId, {
+        password,
+      });
+      if (updateErr) {
+        console.error("Error updating auth user password", updateErr.message);
+      }
+    } else {
+      // Create new Supabase auth user for this affiliate
+      const { data: userRes, error: userErr } = await (supabase as any).auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+      
+      if (userErr) {
+        console.error("Error creating auth user", userErr.message);
 
-      // Handle case where email is already registered in Supabase auth
-      const msg = String(userErr.message || "").toLowerCase();
-      if (msg.includes("user already registered") || msg.includes("already exists")) {
+        const msg = String(userErr.message || "").toLowerCase();
+        
+        // Handle case where email is already registered in Supabase auth
+        if (msg.includes("user already registered") || msg.includes("already exists")) {
+          return NextResponse.json(
+            { error: "An account with this email already exists. Please log in instead." },
+            { status: 400 }
+          );
+        }
+
+        // Handle invalid email format
+        if (msg.includes("invalid") && msg.includes("email")) {
+          return NextResponse.json(
+            { error: "Please enter a valid email address." },
+            { status: 400 }
+          );
+        }
+
+        // Handle weak password
+        if (msg.includes("password")) {
+          return NextResponse.json(
+            { error: "Password is too weak. Please use at least 6 characters." },
+            { status: 400 }
+          );
+        }
+
+        // Handle rate limiting
+        if (msg.includes("rate") || msg.includes("limit") || msg.includes("too many")) {
+          return NextResponse.json(
+            { error: "Too many signup attempts. Please wait a few minutes and try again." },
+            { status: 429 }
+          );
+        }
+
+        // Generic error with more context
         return NextResponse.json(
-          { error: "An account with this email already exists. Please log in instead." },
+          { error: `Unable to create account: ${userErr.message || "Please check your details and try again."}` },
           { status: 400 }
         );
       }
-
-      return NextResponse.json({ error: "Failed to create user" }, { status: 400 });
+      
+      authUserId = userRes?.user?.id;
     }
 
     const { data, error } = await supabase
@@ -87,7 +156,7 @@ export async function POST(req: Request) {
         city,
         code,
         notes: how_hear,
-        active: true,
+        active: false, // Requires admin approval
       } as any)
       .select('id, code')
       .maybeSingle();

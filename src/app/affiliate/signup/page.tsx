@@ -73,14 +73,8 @@ export default function AffiliateSignupPage() {
       const code = String(data.code || "");
       setSuccess({ code });
 
-      // Log them in immediately with Supabase auth, then send to dashboard
-      try {
-        await supabaseBrowser.auth.signInWithPassword({ email, password: pwd });
-      } catch {
-        // even if login fails, still send them to dashboard; they can log in manually
-      }
-
-      router.push("/affiliate/dashboard");
+      // Don't auto-redirect - show success message with pending approval info
+      // User can log in after admin approves their account
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
     } finally {
@@ -106,6 +100,9 @@ export default function AffiliateSignupPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
+      {/* Progress reassurance */}
+      <p className="text-center text-xs text-gray-500">⏱ Takes less than 2 minutes</p>
+
       <div className="space-y-2 rounded-lg bg-emerald-50/70 border border-emerald-100 px-4 py-3">
         <p className="text-xs font-medium text-emerald-700 flex items-center gap-1">
           <span aria-hidden="true">💸</span>
@@ -119,6 +116,18 @@ export default function AffiliateSignupPage() {
         <p className="text-xs text-gray-600">
           ✔ Free to join · No stock required · No upfront investment
         </p>
+      </div>
+
+      {/* Program basics box */}
+      <div className="border rounded-lg bg-amber-50/50 border-amber-200 p-4 text-sm space-y-2">
+        <h2 className="font-medium text-amber-800">📋 Program basics (quick read)</h2>
+        <ul className="space-y-1 text-gray-700 text-sm">
+          <li>• Clients get <strong>10% off</strong> when they use your code</li>
+          <li>• You earn <strong>10% commission</strong> (15% after 10 successful deliveries/month)</li>
+          <li>• Earnings become payable <strong>10 days after delivery</strong></li>
+          <li>• Payouts are made monthly (<strong>10th of each month</strong>)</li>
+          <li>• Repeated failed deliveries may deactivate the code</li>
+        </ul>
       </div>
 
       {/* What happens after you sign up */}
@@ -138,14 +147,26 @@ export default function AffiliateSignupPage() {
 
       {success ? (
         <div className="border rounded p-4 bg-green-50 text-green-900 space-y-3">
-          <h2 className="text-lg font-semibold">Profile created successfully</h2>
+          <h2 className="text-lg font-semibold">🎉 Application submitted successfully!</h2>
           <p>Your referral code is:</p>
           <div className="text-2xl font-mono font-bold tracking-widest">{success.code}</div>
+          
+          <div className="bg-amber-50 border border-amber-200 rounded p-3 text-amber-800 text-sm space-y-2">
+            <p className="font-medium">⏳ Pending Approval</p>
+            <p>Your account is being reviewed by our team. You will receive a WhatsApp message once approved (usually within 24 hours).</p>
+          </div>
+          
           <p className="text-sm text-green-800">
-            Share this code with your customers. When they order from our website and enter this
-            code at checkout, they will receive a discount and you will earn commission on their
-            purchases.
+            Once approved, you can log in to your dashboard and start sharing your code with customers.
+            They will receive a discount and you will earn commission on their purchases.
           </p>
+          
+          <a 
+            href="/affiliate/dashboard" 
+            className="inline-block mt-2 text-sm text-emerald-600 hover:text-emerald-700 underline"
+          >
+            Go to login page →
+          </a>
         </div>
       ) : (
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 border rounded p-4 bg-white">
@@ -156,8 +177,11 @@ export default function AffiliateSignupPage() {
           <div>
             <label className="block text-sm mb-1">I am</label>
             <select name="type" className="border rounded px-3 py-2 w-full" defaultValue="individual">
-              <option value="individual">Individual beautician / student</option>
-              <option value="parlour">Parlour / salon</option>
+              <option value="individual">Beautician / Salon professional</option>
+              <option value="student">Student / Trainee</option>
+              <option value="retail">Retail or salon staff (recommend products to customers)</option>
+              <option value="recommender">Independent recommender (friends, community, WhatsApp groups)</option>
+              <option value="parlour">Parlour / Salon owner</option>
             </select>
           </div>
 
@@ -190,7 +214,7 @@ export default function AffiliateSignupPage() {
               placeholder="03XXXXXXXXX"
             />
             <p className="mt-1 text-xs text-gray-500">
-              We use WhatsApp only for important updates and support. No spam, only important updates.
+              This number will be used to verify your account and send payout updates.
             </p>
           </div>
 
@@ -267,6 +291,26 @@ export default function AffiliateSignupPage() {
             />
           </div>
 
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              name="terms"
+              id="terms"
+              required
+              className="mt-1"
+            />
+            <label htmlFor="terms" className="text-sm text-gray-700">
+              I agree that commission is paid only on valid delivered orders after a 10-day hold, and may be voided for returns/refunds or customer-caused failed deliveries.{" "}
+              <a
+                href="/affiliate/terms"
+                target="_blank"
+                className="text-emerald-600 hover:text-emerald-700 underline"
+              >
+                View full terms
+              </a>
+            </label>
+          </div>
+
           <div className="space-y-3 pt-1">
             <p className="text-sm text-gray-800">
               Start earning from the trust you&apos;ve already built with your clients.
@@ -275,9 +319,9 @@ export default function AffiliateSignupPage() {
             <button
               type="submit"
               disabled={submitting}
-              className={`w-full sm:w-auto rounded px-5 py-2.5 text-white ${submitting ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
+              className={`w-full sm:w-auto rounded-lg px-6 py-3 text-white font-medium ${submitting ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
             >
-              {submitting ? "Submitting…" : "Create account"}
+              {submitting ? "Submitting…" : "Get my referral code"}
             </button>
 
             <p className="text-xs text-gray-500">
@@ -305,9 +349,9 @@ export default function AffiliateSignupPage() {
               type="button"
               onClick={() => formRef.current?.requestSubmit()}
               disabled={submitting}
-              className={`w-full rounded px-5 py-2.5 text-white ${submitting ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
+              className={`w-full rounded-lg px-5 py-2.5 text-white font-medium ${submitting ? "bg-gray-400" : "bg-black hover:bg-gray-900"}`}
             >
-              {submitting ? "Submitting…" : "Create account"}
+              {submitting ? "Submitting…" : "Get my referral code"}
             </button>
           </div>
         </div>
