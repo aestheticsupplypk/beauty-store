@@ -50,16 +50,22 @@ export default function ImageCarousel({ images, interval = 5000 }: ImageCarousel
       {/* Images */}
       {images.map((image, index) => (
         <div
-          key={image.src}
+          key={image.src || `placeholder-${index}`}
           className={`absolute inset-0 transition-all duration-500 ${index === currentIndex ? 'opacity-100 translate-x-0' : `opacity-0 ${direction === 'next' ? 'translate-x-full' : '-translate-x-full'}`}`}
         >
-          <Image
-            src={image.src}
-            alt={image.alt}
-            fill
-            className="object-contain p-4 transition-transform duration-500 md:hover:scale-105"
-            priority={index === 0}
-          />
+          {image.src ? (
+            <Image
+              src={image.src}
+              alt={image.alt}
+              fill
+              className="object-contain p-4 transition-transform duration-500 md:hover:scale-105"
+              priority={index === 0}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-rose-50">
+              <span className="text-rose-300 text-sm">Image coming soon</span>
+            </div>
+          )}
         </div>
       ))}
 

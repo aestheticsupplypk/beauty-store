@@ -28,9 +28,13 @@ type BuyPanelProps = {
   ctaSize?: 'small' | 'medium' | 'large';
   promotions?: any[];
   hasColorDimension?: boolean;
+  // Product info for cart
+  productId?: string;
+  productName?: string;
+  productSlug?: string;
 };
 
-export default function BuyPanel({ colors, models, packages, sizes, matrix, colorThumbs, logoUrl, specialMessage, darazUrl, darazTrustLine, chatFacebookUrl, chatInstagramUrl, contentIdSource, variantSkuMap, ctaLabel: ctaLabelProp, ctaSize, promotions, hasColorDimension }: BuyPanelProps) {
+export default function BuyPanel({ colors, models, packages, sizes, matrix, colorThumbs, logoUrl, specialMessage, darazUrl, darazTrustLine, chatFacebookUrl, chatInstagramUrl, contentIdSource, variantSkuMap, ctaLabel: ctaLabelProp, ctaSize, promotions, hasColorDimension, productId, productName, productSlug }: BuyPanelProps) {
   // Helpers to compute availability for an option under current constraints
   const availabilityForColor = React.useCallback((c: string) => {
     return Object.entries(matrix)
@@ -460,6 +464,9 @@ export default function BuyPanel({ colors, models, packages, sizes, matrix, colo
         contentIdSource={contentIdSource}
         variantSkuMap={variantSkuMap}
         promotions={promotions as any}
+        productId={productId}
+        productName={productName}
+        productSlug={productSlug}
       />
 
       {/* Floating buy panel that follows scrolling; grows near bottom */}

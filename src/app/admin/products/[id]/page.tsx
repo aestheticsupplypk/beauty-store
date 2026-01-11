@@ -214,6 +214,85 @@ export default function EditProductPage() {
     }
   };
 
+  // Upsell management functions
+  const addUpsell = async () => {
+    if (!product || !selectedUpsellProduct) return;
+    // Check if already exists
+    if (upsells.some(u => u.upsell_product_id === selectedUpsellProduct)) {
+      setError('This product is already added as an upsell');
+      return;
+    }
+    // Check max 6 limit
+    if (upsells.length >= 6) {
+      setError('Maximum 6 upsells allowed per product');
+      return;
+    }
+    setSavingUpsells(true);
+    setError(null);
+    try {
+      const { data, error } = await supabaseBrowser
+        .from('product_upsells')
+        .insert({
+          product_id: product.id,
+          upsell_product_id: selectedUpsellProduct,
+          sort_order: upsells.length,
+          upsell_type: 'recommended'
+        })
+        .select('id, product_id, upsell_product_id, sort_order, upsell_type')
+        .single();
+      if (error) throw error;
+      const upsellProduct = allProducts.find(p => p.id === selectedUpsellProduct);
+      setUpsells(prev => [...prev, { ...data, upsell_product_name: upsellProduct?.name }]);
+      setSelectedUpsellProduct('');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to add upsell');
+    } finally {
+      setSavingUpsells(false);
+    }
+  };
+
+  const removeUpsell = async (id: string) => {
+    setSavingUpsells(true);
+    setError(null);
+    try {
+      const { error } = await supabaseBrowser
+        .from('product_upsells')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      setUpsells(prev => prev.filter(u => u.id !== id));
+    } catch (e: any) {
+      setError(e?.message || 'Failed to remove upsell');
+    } finally {
+      setSavingUpsells(false);
+    }
+  };
+
+  const moveUpsell = async (id: string, direction: 'up' | 'down') => {
+    const idx = upsells.findIndex(u => u.id === id);
+    if (idx < 0) return;
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= upsells.length) return;
+    
+    const newUpsells = [...upsells];
+    [newUpsells[idx], newUpsells[newIdx]] = [newUpsells[newIdx], newUpsells[idx]];
+    // Update sort_order
+    newUpsells.forEach((u, i) => u.sort_order = i);
+    setUpsells(newUpsells);
+    
+    // Save to DB
+    try {
+      for (const u of newUpsells) {
+        await supabaseBrowser
+          .from('product_upsells')
+          .update({ sort_order: u.sort_order })
+          .eq('id', u.id);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to reorder upsells');
+    }
+  };
+
   const [product, setProduct] = useState<Product | null>(null);
   const [media, setMedia] = useState<Media[]>([]);
   const [specs, setSpecs] = useState<SpecRow[]>([]);
@@ -232,6 +311,13 @@ export default function EditProductPage() {
   const [enablePackage, setEnablePackage] = useState<boolean>(false);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [savingPromos, setSavingPromos] = useState(false);
+
+  // Upsells state
+  type UpsellRow = { id: string; product_id: string; upsell_product_id: string; sort_order: number; upsell_type: string; upsell_product_name?: string };
+  const [upsells, setUpsells] = useState<UpsellRow[]>([]);
+  const [savingUpsells, setSavingUpsells] = useState(false);
+  const [allProducts, setAllProducts] = useState<{ id: string; name: string }[]>([]);
+  const [selectedUpsellProduct, setSelectedUpsellProduct] = useState<string>('');
 
   // Local form state
   const [name, setName] = useState('');
@@ -401,6 +487,30 @@ export default function EditProductPage() {
           start_at: p.start_at ? new Date(p.start_at as string).toISOString().slice(0, 16) : null,
           end_at: p.end_at ? new Date(p.end_at as string).toISOString().slice(0, 16) : null,
         })));
+
+        // Load product upsells
+        const { data: upsellData } = await supabaseBrowser
+          .from('product_upsells')
+          .select('id, product_id, upsell_product_id, sort_order, upsell_type, products!product_upsells_upsell_product_id_fkey(name)')
+          .eq('product_id', params.id)
+          .order('sort_order', { ascending: true });
+        setUpsells(((upsellData || []) as any[]).map((u) => ({
+          id: String(u.id),
+          product_id: String(u.product_id),
+          upsell_product_id: String(u.upsell_product_id),
+          sort_order: Number(u.sort_order || 0),
+          upsell_type: u.upsell_type || 'recommended',
+          upsell_product_name: u.products?.name || 'Unknown Product',
+        })));
+
+        // Load all active products for upsell dropdown (exclude current product)
+        const { data: allProds } = await supabaseBrowser
+          .from('products')
+          .select('id, name')
+          .eq('active', true)
+          .neq('id', params.id)
+          .order('name', { ascending: true });
+        setAllProducts((allProds || []).map((p: any) => ({ id: String(p.id), name: p.name })));
 
         // Load Color option type id and existing color values for this product
         const { data: ot } = await supabaseBrowser
@@ -1871,6 +1981,91 @@ export default function EditProductPage() {
             {savingPromos ? 'Saving…' : 'Save promotions'}
           </button>
         </div>
+      </section>
+
+      {/* Upsells / Cross-sells */}
+      <section className="space-y-4 border rounded p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium">Upsells / Cross-sells</h2>
+          <span className="text-xs text-gray-500">{upsells.length}/6 products</span>
+        </div>
+        <p className="text-xs text-gray-600">
+          Add products to suggest in the cart drawer when customers add this product. Maximum 6 upsells, but only 3 are shown by default.
+        </p>
+        
+        {/* Add upsell dropdown */}
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-sm text-gray-600 mb-1">Add product</label>
+            <select
+              value={selectedUpsellProduct}
+              onChange={(e) => setSelectedUpsellProduct(e.target.value)}
+              className="w-full border rounded px-3 py-2"
+              disabled={upsells.length >= 6}
+            >
+              <option value="">Select a product...</option>
+              {allProducts
+                .filter(p => !upsells.some(u => u.upsell_product_id === p.id))
+                .map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={addUpsell}
+            disabled={!selectedUpsellProduct || savingUpsells || upsells.length >= 6}
+            className={`px-4 py-2 rounded text-white ${!selectedUpsellProduct || savingUpsells || upsells.length >= 6 ? 'bg-gray-400' : 'bg-black hover:bg-gray-800'}`}
+          >
+            {savingUpsells ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+
+        {/* Upsells list */}
+        {upsells.length === 0 ? (
+          <div className="text-gray-500 text-sm py-4 text-center border-2 border-dashed rounded">
+            No upsells configured. Add products above to suggest them in the cart.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {upsells.map((u, idx) => (
+              <div key={u.id} className="flex items-center gap-2 p-3 border rounded bg-gray-50">
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveUpsell(u.id, 'up')}
+                    disabled={idx === 0}
+                    className={`text-xs px-1.5 py-0.5 rounded ${idx === 0 ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-200'}`}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveUpsell(u.id, 'down')}
+                    disabled={idx === upsells.length - 1}
+                    className={`text-xs px-1.5 py-0.5 rounded ${idx === upsells.length - 1 ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-200'}`}
+                  >
+                    ▼
+                  </button>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium text-sm">{u.upsell_product_name}</div>
+                  <div className="text-xs text-gray-500">
+                    {idx < 3 ? '✓ Shown in cart' : '○ Hidden (overflow)'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeUpsell(u.id)}
+                  disabled={savingUpsells}
+                  className="text-red-600 hover:underline text-sm"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Checkout Extras */}

@@ -4,6 +4,8 @@ import BuyPanel from '@/components/web/landing/BuyPanel';
 import dynamic from 'next/dynamic';
 const ReviewsSection = dynamic(() => import('@/components/web/reviews/ReviewsSection'), { ssr: false });
 const ReviewSummary = dynamic(() => import('@/components/web/reviews/ReviewSummary'), { ssr: false });
+const CartIcon = dynamic(() => import('@/components/web/cart/CartIcon'), { ssr: false });
+const AttributionCapture = dynamic(() => import('@/components/web/landing/AttributionCapture'), { ssr: false });
 import Image from 'next/image';
 import ImageGallery, { type MediaItem } from '@/components/web/product/ImageGallery';
 import UTMCapture from '@/components/web/landing/UTMCapture';
@@ -340,6 +342,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
   return (
     <div className="max-w-6xl mx-auto p-3 sm:p-5 md:p-6 grid grid-cols-1 lg:grid-cols-[680px_1fr] gap-3 sm:gap-6 lg:gap-8 items-start">
       <UTMCapture />
+      <AttributionCapture productSlug={product.slug} />
       {/* Meta Pixel: ViewContent */}
       <LPViewPixel
         productId={product.id}
@@ -362,10 +365,12 @@ export default async function LandingPage({ params }: { params: { slug: string }
               className="h-9 lg:h-14 w-auto object-contain rounded border bg-white p-1 shadow-sm"
             />
           )}
-          <div>
+          <div className="flex-1">
             <h1 className="text-sm sm:text-lg lg:text-2xl font-semibold max-w-[36ch] leading-tight">{product.name}</h1>
             <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Cash on Delivery · 24–48h Dispatch · Easy Returns</p>
           </div>
+          {/* Cart icon - shows when cart has items */}
+          <CartIcon />
         </div>
       </header>
       {/* Left: Gallery + Content */}
@@ -401,6 +406,9 @@ export default async function LandingPage({ params }: { params: { slug: string }
             ctaSize={ctaSize as any}
             promotions={promotions as any}
             hasColorDimension={hasColorDimension}
+            productId={product.id}
+            productName={product.name}
+            productSlug={product.slug}
           />
           <ReviewSummary productId={product.id} />
         </div>
@@ -543,6 +551,9 @@ export default async function LandingPage({ params }: { params: { slug: string }
             ctaSize={ctaSize as any}
             promotions={promotions as any}
             hasColorDimension={hasColorDimension}
+            productId={product.id}
+            productName={product.name}
+            productSlug={product.slug}
           />
           <ReviewSummary productId={product.id} />
           <SocialLinks

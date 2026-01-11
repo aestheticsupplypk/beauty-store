@@ -8,6 +8,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import Link from "next/link";
 import { ensurePixel, track } from "@/lib/pixel";
 import { getMetaContentId } from "@/lib/metaContentId";
+import { useCart } from "@/contexts/CartContext";
 
 type CartItem = { variant_id: string; qty: number };
 
@@ -51,6 +52,7 @@ function CheckoutInner() {
   const router = useRouter();
   const search = useSearchParams();
   const itemsParam = search.get("items");
+  const { attribution, clearCart } = useCart();
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -290,15 +292,22 @@ function CheckoutInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemsParam]);
 
-  // Prefill referral / beautician code from URL (?ref=) once
+  // Prefill referral / beautician code from cart attribution (first-touch locked) or URL
   useEffect(() => {
     try {
-      const raw = search.get('ref');
-      if (raw && !refCode) {
-        setRefCode(String(raw).trim());
+      // Priority: locked attribution from cart context > URL param
+      if (attribution.refCode && attribution.refCodeLocked && !refCode) {
+        setRefCode(String(attribution.refCode).trim().toUpperCase());
+        // Auto-validate the locked code
+        setRefStatus('valid');
+      } else {
+        const raw = search.get('ref');
+        if (raw && !refCode) {
+          setRefCode(String(raw).trim().toUpperCase());
+        }
       }
     } catch {}
-  }, [search, refCode]);
+  }, [search, refCode, attribution.refCode, attribution.refCodeLocked]);
 
   // When province changes and city-rates are enabled, fetch cities
   useEffect(() => {
@@ -612,6 +621,8 @@ function CheckoutInner() {
       if (!res.ok) throw new Error(data?.error || "Failed to place order");
       // success: store id, clear cart in UI + URL, reset form
       setSuccess({ order_id: data.order_id });
+      // Clear cart context after successful order
+      clearCart();
       // capture totals before clearing
       const baseSubtotal = Number(subtotal) || 0;
       const appliedRefDiscount = refStatus === 'valid' ? Number(refDiscountAmount || 0) : 0;

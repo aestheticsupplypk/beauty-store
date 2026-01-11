@@ -3,6 +3,8 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/lib/pixel';
+import { useCart } from '@/contexts/CartContext';
+import { supabaseBrowser } from '@/lib/supabaseBrowser';
 
 type Matrix = Record<string, { price: number; availability: number; variantId: string }>;
 
@@ -21,10 +23,15 @@ type OrderDrawerProps = {
   contentIdSource?: 'sku' | 'variant_id';
   variantSkuMap?: Record<string, string>;
   promotions?: Array<{ id: string; name: string; active: boolean; type: 'percent' | 'bxgy'; min_qty: number; discount_pct: number | null; free_qty: number | null; start_at?: string | null; end_at?: string | null }>;
+  // Product info for cart
+  productId?: string;
+  productName?: string;
+  productSlug?: string;
 };
 
-export default function OrderDrawer({ open, onClose, colors, models, packages, sizes, matrix, initialColor, colorThumbs, logoUrl, specialMessage, contentIdSource, variantSkuMap, promotions }: OrderDrawerProps) {
+export default function OrderDrawer({ open, onClose, colors, models, packages, sizes, matrix, initialColor, colorThumbs, logoUrl, specialMessage, contentIdSource, variantSkuMap, promotions, productId, productName, productSlug }: OrderDrawerProps) {
   const router = useRouter();
+  const { addItem, openCart, itemCount } = useCart();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -91,18 +98,24 @@ export default function OrderDrawer({ open, onClose, colors, models, packages, s
     setLoading(true);
     setError(null);
     try {
-      const items = Object.entries(qtyMap)
+      const selectedItems = Object.entries(qtyMap)
         .filter(([, q]) => (q || 0) > 0)
-        .map(([k, q]) => ({ variant_id: matrix[k]?.variantId, qty: q }))
+        .map(([k, q]) => ({ 
+          matrixKey: k,
+          variant_id: matrix[k]?.variantId, 
+          qty: q,
+          price: matrix[k]?.price || 0
+        }))
         .filter((it) => !!it.variant_id);
-      if (items.length === 0) throw new Error('Please enter quantity for at least one option');
-      // Fire AddToCart with contents/value before navigating to checkout
+      if (selectedItems.length === 0) throw new Error('Please enter quantity for at least one option');
+      
+      // Fire AddToCart pixel event
       try {
         const priceByVariant = (vid: string): number => {
           for (const cell of Object.values(matrix)) { if (cell?.variantId === vid) return Number(cell?.price || 0); }
           return 0;
         };
-        const contents = items.map((it) => ({
+        const contents = selectedItems.map((it) => ({
           id: (contentIdSource === 'variant_id') ? (it.variant_id as string) : ((variantSkuMap?.[it.variant_id as string]) || (it.variant_id as string)),
           quantity: Number(it.qty || 0),
           item_price: priceByVariant(it.variant_id as string),
@@ -111,12 +124,60 @@ export default function OrderDrawer({ open, onClose, colors, models, packages, s
         const content_ids = contents.map(c => c.id).slice(0, 20);
         track('AddToCart', { contents, content_ids, value, currency: 'PKR', content_type: 'product' });
       } catch {}
-      // Pass items to /checkout using query param (URL-encoded JSON)
-      const itemsParam = encodeURIComponent(JSON.stringify(items));
-      const fromPath = typeof window !== 'undefined' ? window.location.pathname : '/';
-      const fromParam = encodeURIComponent(fromPath);
-      router.push(`/checkout?items=${itemsParam}&from=${fromParam}`);
+      
+      // Add items to cart context
+      for (const item of selectedItems) {
+        // Build variant label from matrix key (color|model|package|size)
+        const [c, m, p, s] = item.matrixKey.split('|');
+        const labelParts = [c, m, p, s].filter(Boolean);
+        const variantLabel = labelParts.join(' / ');
+        
+        addItem({
+          variantId: item.variant_id as string,
+          productId: productId || '',
+          productName: productName || 'Product',
+          productSlug: productSlug || '',
+          variantLabel,
+          price: item.price,
+          quantity: item.qty,
+          thumbUrl: logoUrl || undefined,
+        });
+      }
+      
+      // Fast-path logic: check if we should skip cart drawer
+      // Skip cart drawer if: single item in cart AND no upsells configured for this product
+      let hasUpsells = false;
+      if (productId) {
+        try {
+          const { count } = await supabaseBrowser
+            .from('product_upsells')
+            .select('id', { count: 'exact', head: true })
+            .eq('product_id', productId);
+          hasUpsells = (count || 0) > 0;
+        } catch {}
+      }
+      
+      // Calculate total cart items AFTER adding new items
+      const newItemsQty = selectedItems.reduce((sum, it) => sum + it.qty, 0);
+      const totalCartItemsAfterAdd = itemCount + newItemsQty;
+      
       onClose();
+      
+      // Priority A: Cart has 2+ items → open CartDrawer
+      // Priority B: Upsells exist → open CartDrawer  
+      // Priority C: Single item + no upsells → fast path to checkout
+      if (totalCartItemsAfterAdd >= 2 || hasUpsells) {
+        // Cart drawer path: multi-item or upsells exist
+        openCart();
+      } else {
+        // Fast path: single item, no upsells → go directly to checkout (old experience)
+        const checkoutItems = selectedItems.map(it => ({
+          variant_id: it.variant_id,
+          qty: it.qty,
+        }));
+        const itemsParam = encodeURIComponent(JSON.stringify(checkoutItems));
+        router.push(`/checkout?items=${itemsParam}`);
+      }
     } catch (err: any) {
       setError(err?.message || 'Unknown error');
     } finally {

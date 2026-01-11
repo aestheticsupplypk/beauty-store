@@ -96,6 +96,18 @@ export default async function HomeServerContainer() {
     productCards.push({ id: pid, name, slug, fromPrice, image });
   }
 
+  // Count purchasable products (active product + has active variant)
+  const purchasableProducts = productCards.filter(p => p.fromPrice !== null);
+  const purchasableCount = purchasableProducts.length;
+  
+  // Get featured product info for hero CTA
+  const featuredProduct = purchasableProducts.length > 0 ? purchasableProducts[0] : (productCards.length > 0 ? productCards[0] : null);
+
+  // Conditional routing: 1 product → LP, 2+ → /products
+  const productsHref = purchasableCount === 1 
+    ? `/lp/${purchasableProducts[0].slug}` 
+    : '/products';
+
   return (
     <HomePresenter
       startingPrice={startingPrice}
@@ -103,6 +115,9 @@ export default async function HomeServerContainer() {
       colorAvailability={colorAvailability}
       products={productCards}
       primaryGallery={primaryGallery}
+      activeProductCount={purchasableCount}
+      featuredProduct={featuredProduct}
+      productsHref={productsHref}
     />
   );
 }
