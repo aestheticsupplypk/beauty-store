@@ -1702,6 +1702,39 @@ export default function EditProductPage() {
               </span>
             </div>
           </div>
+
+          {/* Commission Preview */}
+          {affiliateEnabled && affiliateCommissionValue && (
+            <div className="mt-4 p-3 bg-gray-50 rounded border">
+              <h4 className="text-xs font-medium text-gray-700 mb-2">Commission Preview by Tier</h4>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="text-center p-2 bg-white rounded border">
+                  <div className="text-gray-500">Bronze (×1.0)</div>
+                  <div className="font-medium">
+                    {affiliateCommissionType === 'percent' 
+                      ? `${Number(affiliateCommissionValue)}%`
+                      : `${Number(affiliateCommissionValue)} PKR`}
+                  </div>
+                </div>
+                <div className="text-center p-2 bg-white rounded border">
+                  <div className="text-gray-500">Silver (×1.5)</div>
+                  <div className="font-medium">
+                    {affiliateCommissionType === 'percent' 
+                      ? `${(Number(affiliateCommissionValue) * 1.5).toFixed(1)}%`
+                      : `${Math.round(Number(affiliateCommissionValue) * 1.5)} PKR`}
+                  </div>
+                </div>
+                <div className="text-center p-2 bg-white rounded border">
+                  <div className="text-gray-500">Gold (×2.0)</div>
+                  <div className="font-medium">
+                    {affiliateCommissionType === 'percent' 
+                      ? `${(Number(affiliateCommissionValue) * 2).toFixed(1)}%`
+                      : `${Math.round(Number(affiliateCommissionValue) * 2)} PKR`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

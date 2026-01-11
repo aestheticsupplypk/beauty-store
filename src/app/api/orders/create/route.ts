@@ -171,6 +171,11 @@ export async function POST(req: Request) {
     let itemsSubtotalCustomer = 0;
     let totalBaseCommission = 0;
     let totalCommission = 0;
+    let totalBasePriceForCommission = 0; // Sum of base prices used for commission calculation
+    
+    // Track commission type/value for snapshot (use first product's settings as representative)
+    let snapshotCommissionType: 'percent' | 'fixed' | null = null;
+    let snapshotCommissionValue: number | null = null;
 
     for (const it of items) {
       const v = variantMap[it.variant_id];
@@ -200,8 +205,15 @@ export async function POST(req: Request) {
         const cVal = settings.affiliate_commission_value != null ? Number(settings.affiliate_commission_value) : 0;
         if (cType === 'percent' && cVal > 0) {
           commissionPerUnit = baseUnit * (cVal / 100);
+          totalBasePriceForCommission += baseUnit * qty;
         } else if (cType === 'fixed' && cVal > 0) {
           commissionPerUnit = cVal;
+        }
+        
+        // Capture first product's commission settings for snapshot
+        if (snapshotCommissionType === null && cVal > 0) {
+          snapshotCommissionType = cType;
+          snapshotCommissionValue = cVal;
         }
         
         // Apply tier multiplier to commission
@@ -264,6 +276,9 @@ export async function POST(req: Request) {
         affiliate_tier_multiplier: affiliateId ? tierMultiplier : null,
         affiliate_base_commission: affiliateId ? totalBaseCommission : null,
         affiliate_commission_rule: commissionRule,
+        affiliate_commission_type_snapshot: affiliateId ? snapshotCommissionType : null,
+        affiliate_commission_value_snapshot: affiliateId ? snapshotCommissionValue : null,
+        affiliate_base_price_snapshot: affiliateId && snapshotCommissionType === 'percent' ? totalBasePriceForCommission : null,
       })
       .select('id')
       .maybeSingle();

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Link from 'next/link';
 
 interface Tier {
@@ -16,7 +15,6 @@ interface Tier {
 }
 
 export default function AffiliateTiersPage() {
-  const supabase = createClientComponentClient();
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -43,15 +41,16 @@ export default function AffiliateTiersPage() {
 
   async function fetchTiers() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('affiliate_tiers')
-      .select('*')
-      .order('min_delivered_orders_30d', { ascending: true });
-
-    if (error) {
-      setError('Failed to load tiers: ' + error.message);
-    } else {
-      setTiers(data || []);
+    try {
+      const res = await fetch('/api/admin/affiliate/tiers');
+      const json = await res.json();
+      if (!res.ok) {
+        setError('Failed to load tiers: ' + (json.error || 'Unknown error'));
+      } else {
+        setTiers(json.tiers || []);
+      }
+    } catch (e: any) {
+      setError('Failed to load tiers: ' + (e?.message || 'Unknown error'));
     }
     setLoading(false);
   }
@@ -61,23 +60,29 @@ export default function AffiliateTiersPage() {
     setError('');
     setSuccess('');
 
-    const { error } = await supabase
-      .from('affiliate_tiers')
-      .update({
-        name: editForm.name,
-        min_delivered_orders_30d: editForm.min_delivered_orders_30d,
-        multiplier_percent: editForm.multiplier_percent,
-        discount_multiplier_percent: editForm.discount_multiplier_percent,
-        active: editForm.active,
-      })
-      .eq('id', tier.id);
-
-    if (error) {
-      setError('Failed to save: ' + error.message);
-    } else {
-      setSuccess('Tier updated successfully');
-      setEditingId(null);
-      fetchTiers();
+    try {
+      const res = await fetch('/api/admin/affiliate/tiers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tier.id,
+          name: editForm.name,
+          min_delivered_orders_30d: editForm.min_delivered_orders_30d,
+          multiplier_percent: editForm.multiplier_percent,
+          discount_multiplier_percent: editForm.discount_multiplier_percent,
+          active: editForm.active,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError('Failed to save: ' + (json.error || 'Unknown error'));
+      } else {
+        setSuccess('Tier updated successfully');
+        setEditingId(null);
+        fetchTiers();
+      }
+    } catch (e: any) {
+      setError('Failed to save: ' + (e?.message || 'Unknown error'));
     }
     setSaving(false);
   }
@@ -92,45 +97,54 @@ export default function AffiliateTiersPage() {
     setError('');
     setSuccess('');
 
-    const { error } = await supabase
-      .from('affiliate_tiers')
-      .insert([newTier]);
-
-    if (error) {
-      setError('Failed to add tier: ' + error.message);
-    } else {
-      setSuccess('Tier added successfully');
-      setShowAddForm(false);
-      setNewTier({
-        name: '',
-        min_delivered_orders_30d: 0,
-        multiplier_percent: 100,
-        discount_multiplier_percent: 100,
-        active: true,
+    try {
+      const res = await fetch('/api/admin/affiliate/tiers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTier),
       });
-      fetchTiers();
+      const json = await res.json();
+      if (!res.ok) {
+        setError('Failed to add tier: ' + (json.error || 'Unknown error'));
+      } else {
+        setSuccess('Tier added successfully');
+        setShowAddForm(false);
+        setNewTier({
+          name: '',
+          min_delivered_orders_30d: 0,
+          multiplier_percent: 100,
+          discount_multiplier_percent: 100,
+          active: true,
+        });
+        fetchTiers();
+      }
+    } catch (e: any) {
+      setError('Failed to add tier: ' + (e?.message || 'Unknown error'));
     }
     setSaving(false);
   }
 
   async function handleDelete(tier: Tier) {
-    if (!confirm(`Are you sure you want to delete the "${tier.name}" tier?`)) {
+    if (!confirm(`Delete tier "${tier.name}"? This cannot be undone.`)) {
       return;
     }
 
     setSaving(true);
     setError('');
 
-    const { error } = await supabase
-      .from('affiliate_tiers')
-      .delete()
-      .eq('id', tier.id);
-
-    if (error) {
-      setError('Failed to delete: ' + error.message);
-    } else {
-      setSuccess('Tier deleted');
-      fetchTiers();
+    try {
+      const res = await fetch(`/api/admin/affiliate/tiers?id=${tier.id}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError('Failed to delete: ' + (json.error || 'Unknown error'));
+      } else {
+        setSuccess('Tier deleted');
+        fetchTiers();
+      }
+    } catch (e: any) {
+      setError('Failed to delete: ' + (e?.message || 'Unknown error'));
     }
     setSaving(false);
   }
@@ -145,11 +159,9 @@ export default function AffiliateTiersPage() {
     setEditForm({});
   }
 
-  // Calculate effective commission example
-  function getEffectiveExample(multiplier: number) {
-    const basePercent = 10; // Example base
-    const effective = (basePercent * multiplier) / 100;
-    return effective;
+  // Calculate effective commission example - returns multiplier as "×1.5" format
+  function getMultiplierDisplay(multiplier: number) {
+    return `×${(multiplier / 100).toFixed(1)}`;
   }
 
   if (loading) {
@@ -185,11 +197,14 @@ export default function AffiliateTiersPage() {
 
       {/* Info box */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-sm">
-        <p className="font-medium text-blue-800 mb-2">How it works:</p>
+        <p className="font-medium text-blue-800 mb-2">Tier Multiplier</p>
+        <p className="text-blue-700 mb-2">
+          Multiplier applies to the product's base commission (<strong>Fixed or %</strong>).
+        </p>
         <ul className="text-blue-700 space-y-1 ml-4 list-disc">
           <li>Tier is determined by <strong>delivered orders in rolling 30 days</strong></li>
-          <li>At checkout: <code className="bg-blue-100 px-1 rounded">effective_commission = base_commission × (multiplier / 100)</code></li>
-          <li>Example: If product base is 10% and tier multiplier is 150%, affiliate earns 15%</li>
+          <li>Example: Base <strong>500 PKR</strong> + 150% tier = <strong>750 PKR</strong></li>
+          <li>Example: Base <strong>10%</strong> + 150% tier = <strong>15%</strong></li>
           <li>Changes affect <strong>new orders only</strong> — existing order snapshots unchanged</li>
         </ul>
       </div>
@@ -242,7 +257,7 @@ export default function AffiliateTiersPage() {
                 className="border rounded px-3 py-2 w-full text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">
-                If base 10% → effective {getEffectiveExample(newTier.multiplier_percent)}%
+                {getMultiplierDisplay(newTier.multiplier_percent)} base commission
               </p>
             </div>
             <div>
@@ -282,8 +297,8 @@ export default function AffiliateTiersPage() {
             <tr>
               <th className="text-left px-4 py-3 font-medium">Tier</th>
               <th className="text-left px-4 py-3 font-medium">Min Orders (30d)</th>
-              <th className="text-left px-4 py-3 font-medium">Commission Multiplier</th>
-              <th className="text-left px-4 py-3 font-medium">Example</th>
+              <th className="text-left px-4 py-3 font-medium">Multiplier %</th>
+              <th className="text-left px-4 py-3 font-medium">Effect</th>
               <th className="text-left px-4 py-3 font-medium">Status</th>
               <th className="text-right px-4 py-3 font-medium">Actions</th>
             </tr>
@@ -320,8 +335,8 @@ export default function AffiliateTiersPage() {
                         className="border rounded px-2 py-1 w-24 text-sm"
                       />
                     </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      10% → {getEffectiveExample(editForm.multiplier_percent || 100)}%
+                    <td className="px-4 py-3 text-gray-500 font-medium">
+                      {getMultiplierDisplay(editForm.multiplier_percent || 100)}
                     </td>
                     <td className="px-4 py-3">
                       <select
@@ -354,8 +369,8 @@ export default function AffiliateTiersPage() {
                     <td className="px-4 py-3 font-medium">{tier.name}</td>
                     <td className="px-4 py-3">{tier.min_delivered_orders_30d}</td>
                     <td className="px-4 py-3">{tier.multiplier_percent}%</td>
-                    <td className="px-4 py-3 text-gray-500">
-                      10% → {getEffectiveExample(tier.multiplier_percent)}%
+                    <td className="px-4 py-3 text-gray-500 font-medium">
+                      {getMultiplierDisplay(tier.multiplier_percent)}
                     </td>
                     <td className="px-4 py-3">
                       {tier.active ? (
