@@ -75,11 +75,13 @@ export default async function HomeServerContainer() {
     const pid = (p as any).id as string;
     const slug = (p as any).slug as string;
     const name = (p as any).name as string;
+    // Get min price from active variants with price > 0 (purchasable definition)
     const { data: pv } = await supabase
       .from('variants')
       .select('price, active')
       .eq('product_id', pid)
       .eq('active', true)
+      .gt('price', 0)
       .order('price', { ascending: true })
       .limit(1);
     const fromPrice = (pv && pv.length) ? Number((pv[0] as any).price) : null;

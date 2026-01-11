@@ -38,11 +38,31 @@ export function isPurchasableProduct(product: ProductWithVariants): boolean {
 
 /**
  * Check if a product is purchasable (simplified, when fromPrice is pre-computed)
- * fromPrice is computed as the lowest active variant price, so if it exists and > 0, product is purchasable
+ * 
+ * IMPORTANT: fromPrice MUST be computed as:
+ *   MIN(variants.price) WHERE variants.active = true AND variants.price > 0
+ * 
+ * If fromPrice is null or 0, the product is not purchasable.
+ * This helper assumes the caller has already filtered for active variants with price > 0.
  */
 export function isPurchasableFromPrice(product: ProductWithFromPrice): boolean {
   return (product.fromPrice ?? 0) > 0;
 }
+
+/**
+ * Supabase query builder for getting min purchasable price
+ * Use this pattern everywhere to ensure consistency:
+ * 
+ * const { data: pv } = await supabase
+ *   .from('variants')
+ *   .select('price, active')
+ *   .eq('product_id', productId)
+ *   .eq('active', true)
+ *   .gt('price', 0)  // <-- CRITICAL: excludes price = 0 or null
+ *   .order('price', { ascending: true })
+ *   .limit(1);
+ * const fromPrice = pv?.[0]?.price ?? null;
+ */
 
 /**
  * Server-side SQL condition for purchasable products:
