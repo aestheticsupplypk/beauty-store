@@ -12,7 +12,8 @@ export default async function ProductsIndexPage() {
     .eq('active', true)
     .order('created_at', { ascending: false });
 
-  const cards: { id: string; name: string; slug: string; fromPrice: number | null; image: string | null }[] = [];
+  // Purchasable = active product + has at least one active variant with price
+  const cards: { id: string; name: string; slug: string; fromPrice: number | null; image: string | null; isPurchasable: boolean }[] = [];
 
   for (const p of products ?? []) {
     const pid = (p as any).id as string;
@@ -27,6 +28,7 @@ export default async function ProductsIndexPage() {
       .order('price', { ascending: true })
       .limit(1);
     const fromPrice = pv && pv.length ? Number((pv[0] as any).price) : null;
+    const isPurchasable = fromPrice !== null;
 
     const { data: media } = await supabase
       .from('product_media')
@@ -37,7 +39,7 @@ export default async function ProductsIndexPage() {
       .limit(1);
     const image = media && media.length ? ((media[0] as any).url as string) : null;
 
-    cards.push({ id: pid, name, slug, fromPrice, image });
+    cards.push({ id: pid, name, slug, fromPrice, image, isPurchasable });
   }
 
   return (
@@ -55,32 +57,56 @@ export default async function ProductsIndexPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {cards.map((p) => (
-              <Link
+              <div
                 key={p.id}
-                href={`/lp/${p.slug}`}
-                className="group rounded-xl border border-[#EFD6DE] bg-white hover:shadow-md transition-shadow overflow-hidden"
+                className={`group rounded-xl border border-[#EFD6DE] bg-white overflow-hidden ${p.isPurchasable ? 'hover:shadow-md transition-shadow' : 'opacity-75'}`}
               >
-                <div className="aspect-[4/3] w-full bg-rose-50 grid place-items-center overflow-hidden">
-                  {p.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.image}
-                      alt={p.name}
-                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
-                    />
+                {/* Image with Coming Soon badge for non-purchasable */}
+                <Link href={`/lp/${p.slug}`}>
+                  <div className="aspect-[4/3] w-full bg-rose-50 grid place-items-center overflow-hidden relative">
+                    {p.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        className={`w-full h-full object-cover ${p.isPurchasable ? 'group-hover:scale-[1.02] transition-transform' : ''}`}
+                      />
+                    ) : (
+                      <div className="text-rose-300 text-sm">Image coming soon</div>
+                    )}
+                    {/* Coming Soon badge */}
+                    {!p.isPurchasable && (
+                      <div className="absolute top-3 right-3 bg-[#7A1E3A]/90 text-white text-xs font-medium px-3 py-1 rounded-full">
+                        Coming Soon
+                      </div>
+                    )}
+                  </div>
+                </Link>
+                <div className="p-4 space-y-1">
+                  <Link href={`/lp/${p.slug}`}>
+                    <div className="font-medium text-[#2B2B2B] truncate hover:text-[#7A1E3A]">{p.name}</div>
+                  </Link>
+                  {p.isPurchasable ? (
+                    <>
+                      <div className="text-sm font-semibold text-[#7A1E3A]">
+                        From PKR {Number(p.fromPrice).toLocaleString()}
+                      </div>
+                      <div className="text-xs text-[#7A7A7A]">COD • 24–48h Dispatch</div>
+                      <Link 
+                        href={`/lp/${p.slug}`}
+                        className="block pt-2 text-sm text-[#7A1E3A] group-hover:text-[#5A1226] font-medium"
+                      >
+                        View product →
+                      </Link>
+                    </>
                   ) : (
-                    <div className="text-rose-300 text-sm">Image coming soon</div>
+                    <>
+                      <div className="text-sm text-[#7A7A7A]">Price coming soon</div>
+                      <div className="pt-2 text-sm text-[#7A7A7A]">Coming soon</div>
+                    </>
                   )}
                 </div>
-                <div className="p-4 space-y-1">
-                  <div className="font-medium text-[#2B2B2B] truncate">{p.name}</div>
-                  <div className="text-sm text-[#7A1E3A]">
-                    {p.fromPrice != null ? `From PKR ${Number(p.fromPrice).toLocaleString()}` : 'Price coming soon'}
-                  </div>
-                  <div className="text-xs text-[#7A7A7A]">COD • 24–48h Dispatch</div>
-                  <div className="pt-2 text-sm text-[#7A1E3A] group-hover:text-[#5A1226] font-medium">View product →</div>
-                </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

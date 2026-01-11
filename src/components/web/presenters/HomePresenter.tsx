@@ -42,20 +42,39 @@ export default function HomePresenter({ onAddToCart, startingPrice, colorPrices,
   ]), [tealName]);
   const [selectedColor, setSelectedColor] = React.useState<ColorOption>(colorOptions[0]);
   const [activeIndex, setActiveIndex] = React.useState(0);
+  const [isPaused, setIsPaused] = React.useState(false);
+  const [userInteracted, setUserInteracted] = React.useState(false);
   const hasProducts = Array.isArray(products) && products.length > 0;
   const activeProduct = hasProducts ? products[Math.max(0, Math.min(activeIndex, products.length - 1))] : null;
   
-  // Auto-slideshow: cycle through products every 3 seconds when multiple products exist
+  // Auto-slideshow: 6s interval, only when 2+ products, pause on hover or after user interaction
   React.useEffect(() => {
     if (!hasProducts || !products || products.length <= 1) return;
+    if (isPaused || userInteracted) return;
     
     const productCount = products.length;
     const interval = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % productCount);
-    }, 3000);
+    }, 6000);
     
     return () => clearInterval(interval);
-  }, [hasProducts, products]);
+  }, [hasProducts, products, isPaused, userInteracted]);
+  
+  // Manual navigation handlers
+  const goToSlide = (index: number) => {
+    setActiveIndex(index);
+    setUserInteracted(true);
+  };
+  const goToPrev = () => {
+    if (!products) return;
+    setActiveIndex((prev) => (prev - 1 + products.length) % products.length);
+    setUserInteracted(true);
+  };
+  const goToNext = () => {
+    if (!products) return;
+    setActiveIndex((prev) => (prev + 1) % products.length);
+    setUserInteracted(true);
+  };
   const handleAdd = React.useCallback(() => {
     if (typeof onAddToCart === 'function') onAddToCart();
   }, [onAddToCart]);
@@ -177,13 +196,19 @@ export default function HomePresenter({ onAddToCart, startingPrice, colorPrices,
               </div>
             </div>
 
-            <div className="relative w-full max-w-4xl mx-auto px-4 py-8">
+            {/* Hero image area with pause on hover */}
+            <div 
+              className="relative w-full max-w-4xl mx-auto px-4 py-8"
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+            >
+              {/* Prev arrow - only show for 2+ products */}
               <div className="absolute inset-y-1/2 -left-1 translate-y-[-50%] hidden sm:flex">
-                {hasProducts && products.length > 1 && (
+                {hasProducts && products && products.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => setActiveIndex((idx) => (idx - 1 + products.length) % products.length)}
-                    className="w-9 h-9 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white text-blue-700"
+                    onClick={goToPrev}
+                    className="w-9 h-9 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white text-[#7A1E3A]"
                     aria-label="Previous product"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -198,12 +223,13 @@ export default function HomePresenter({ onAddToCart, startingPrice, colorPrices,
                   </button>
                 )}
               </div>
+              {/* Next arrow - only show for 2+ products */}
               <div className="absolute inset-y-1/2 -right-1 translate-y-[-50%] hidden sm:flex">
-                {hasProducts && products.length > 1 && (
+                {hasProducts && products && products.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => setActiveIndex((idx) => (idx + 1) % products.length)}
-                    className="w-9 h-9 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white text-blue-700"
+                    onClick={goToNext}
+                    className="w-9 h-9 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white text-[#7A1E3A]"
                     aria-label="Next product"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -236,6 +262,24 @@ export default function HomePresenter({ onAddToCart, startingPrice, colorPrices,
                   </div>
                 )}
               </div>
+              {/* Dots navigation - only show for 2+ products */}
+              {hasProducts && products && products.length > 1 && (
+                <div className="flex justify-center gap-2 mt-4">
+                  {products.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => goToSlide(idx)}
+                      className={`w-2.5 h-2.5 rounded-full transition-all ${
+                        idx === activeIndex 
+                          ? 'bg-[#7A1E3A] w-6' 
+                          : 'bg-[#7A1E3A]/30 hover:bg-[#7A1E3A]/50'
+                      }`}
+                      aria-label={`Go to product ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
