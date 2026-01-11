@@ -1,5 +1,6 @@
 import HomePresenter from '@/components/web/presenters/HomePresenter';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
+import { isPurchasableFromPrice } from '@/lib/purchasable';
 
 export default async function HomeServerContainer() {
   const supabase = getSupabaseServerClient();
@@ -96,14 +97,15 @@ export default async function HomeServerContainer() {
     productCards.push({ id: pid, name, slug, fromPrice, image });
   }
 
-  // Count purchasable products (active product + has active variant)
-  const purchasableProducts = productCards.filter(p => p.fromPrice !== null);
+  // Filter to purchasable products only using centralized helper
+  // Purchasable = active product + active variant with price > 0
+  const purchasableProducts = productCards.filter(p => isPurchasableFromPrice(p));
   const purchasableCount = purchasableProducts.length;
   
-  // Get featured product info for hero CTA
-  const featuredProduct = purchasableProducts.length > 0 ? purchasableProducts[0] : (productCards.length > 0 ? productCards[0] : null);
+  // Get featured product info for hero CTA (only from purchasable products)
+  const featuredProduct = purchasableProducts.length > 0 ? purchasableProducts[0] : null;
 
-  // Conditional routing: 1 product → LP, 2+ → /products
+  // Conditional routing: 1 purchasable product → LP, 2+ → /products
   const productsHref = purchasableCount === 1 
     ? `/lp/${purchasableProducts[0].slug}` 
     : '/products';
@@ -113,7 +115,7 @@ export default async function HomeServerContainer() {
       startingPrice={startingPrice}
       colorPrices={colorPrices}
       colorAvailability={colorAvailability}
-      products={productCards}
+      products={purchasableProducts}
       primaryGallery={primaryGallery}
       activeProductCount={purchasableCount}
       featuredProduct={featuredProduct}

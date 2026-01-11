@@ -312,6 +312,9 @@ export default async function LandingPage({ params }: { params: { slug: string }
   const variantSkuMap: Record<string, string> = Object.fromEntries(((variants||[]) as any[]).map((v:any)=>[v.id, v.sku]));
   const ctaLabel = (product as any).cta_label || 'Buy on AFAL';
   const ctaSize = ((product as any).cta_size as string | null) || 'medium';
+  
+  // Purchasable check: product must have at least one active variant with price > 0
+  const isPurchasable = (variants || []).some((v: any) => v.active === true && (v.price ?? 0) > 0);
 
   // Build Product JSON-LD for SEO
   const site = SITE_URL;
@@ -409,6 +412,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
             productId={product.id}
             productName={product.name}
             productSlug={product.slug}
+            isPurchasable={isPurchasable}
           />
           <ReviewSummary productId={product.id} />
         </div>
@@ -554,6 +558,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
             productId={product.id}
             productName={product.name}
             productSlug={product.slug}
+            isPurchasable={isPurchasable}
           />
           <ReviewSummary productId={product.id} />
           <SocialLinks

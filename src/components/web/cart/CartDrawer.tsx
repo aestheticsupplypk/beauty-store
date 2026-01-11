@@ -75,24 +75,28 @@ export default function CartDrawer() {
           if (!product || seenIds.has(product.id) || cartProductIds.has(product.id)) continue;
           seenIds.add(product.id);
           
-          // Get min price variant
+          // Get min price variant - only purchasable (active + price > 0)
           const { data: variants } = await supabaseBrowser
             .from('variants')
             .select('id, price')
             .eq('product_id', product.id)
             .eq('active', true)
+            .gt('price', 0)
             .order('price', { ascending: true })
             .limit(1);
 
           const minVariant = variants?.[0];
+          
+          // Skip if no purchasable variant exists
+          if (!minVariant || !minVariant.price || minVariant.price <= 0) continue;
           
           uniqueUpsells.push({
             id: product.id,
             name: product.name,
             slug: product.slug,
             logoUrl: product.logo_url,
-            minPrice: minVariant?.price || 0,
-            variantId: minVariant?.id,
+            minPrice: minVariant.price,
+            variantId: minVariant.id,
           });
 
           if (uniqueUpsells.length >= 3) break; // Max 3 upsells shown

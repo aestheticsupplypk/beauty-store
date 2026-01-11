@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
+import { isPurchasableFromPrice } from '@/lib/purchasable';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export default async function ProductsIndexPage() {
     .eq('active', true)
     .order('created_at', { ascending: false });
 
-  // Purchasable = active product + has at least one active variant with price
+  // Purchasable = active product + has at least one active variant with price > 0
   const cards: { id: string; name: string; slug: string; fromPrice: number | null; image: string | null; isPurchasable: boolean }[] = [];
 
   for (const p of products ?? []) {
@@ -28,7 +29,7 @@ export default async function ProductsIndexPage() {
       .order('price', { ascending: true })
       .limit(1);
     const fromPrice = pv && pv.length ? Number((pv[0] as any).price) : null;
-    const isPurchasable = fromPrice !== null;
+    const isPurchasable = isPurchasableFromPrice({ fromPrice });
 
     const { data: media } = await supabase
       .from('product_media')

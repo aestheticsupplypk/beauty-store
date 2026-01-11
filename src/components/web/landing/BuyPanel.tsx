@@ -32,9 +32,11 @@ type BuyPanelProps = {
   productId?: string;
   productName?: string;
   productSlug?: string;
+  // Purchasable gating
+  isPurchasable?: boolean;
 };
 
-export default function BuyPanel({ colors, models, packages, sizes, matrix, colorThumbs, logoUrl, specialMessage, darazUrl, darazTrustLine, chatFacebookUrl, chatInstagramUrl, contentIdSource, variantSkuMap, ctaLabel: ctaLabelProp, ctaSize, promotions, hasColorDimension, productId, productName, productSlug }: BuyPanelProps) {
+export default function BuyPanel({ colors, models, packages, sizes, matrix, colorThumbs, logoUrl, specialMessage, darazUrl, darazTrustLine, chatFacebookUrl, chatInstagramUrl, contentIdSource, variantSkuMap, ctaLabel: ctaLabelProp, ctaSize, promotions, hasColorDimension, productId, productName, productSlug, isPurchasable = true }: BuyPanelProps) {
   // Helpers to compute availability for an option under current constraints
   const availabilityForColor = React.useCallback((c: string) => {
     return Object.entries(matrix)
@@ -365,13 +367,19 @@ export default function BuyPanel({ colors, models, packages, sizes, matrix, colo
       )}
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <button
-          onClick={() => setDrawerOpen(true)}
-          disabled={!anyAvailForSelection}
-          className={`w-full sm:w-auto rounded-lg ${mainCtaPadding} ${mainCtaText} text-white ${(!anyAvailForSelection) ? 'bg-gray-400' : 'bg-black hover:bg-gray-900'}`}
-        >
-          {ctaLabel}
-        </button>
+        {isPurchasable ? (
+          <button
+            onClick={() => setDrawerOpen(true)}
+            disabled={!anyAvailForSelection}
+            className={`w-full sm:w-auto rounded-lg ${mainCtaPadding} ${mainCtaText} text-white ${(!anyAvailForSelection) ? 'bg-gray-400' : 'bg-black hover:bg-gray-900'}`}
+          >
+            {ctaLabel}
+          </button>
+        ) : (
+          <div className="w-full sm:w-auto rounded-lg px-6 py-3 bg-gray-200 text-gray-500 text-center font-medium">
+            Coming Soon
+          </div>
+        )}
         {/* Visual OR separator to distinguish choices */}
         {darazUrl && (
           <div className="flex items-center justify-center select-none text-gray-600">
@@ -517,13 +525,19 @@ export default function BuyPanel({ colors, models, packages, sizes, matrix, colo
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                onClick={() => setDrawerOpen(true)}
-                disabled={!anyAvailForSelection}
-                className={`w-full sm:w-auto rounded-lg ${nearBottom ? floatCtaPadding : floatCtaPadding} ${floatCtaText} text-white ${(!anyAvailForSelection) ? 'bg-gray-400' : 'bg-black hover:bg-gray-900'}`}
-              >
-                {ctaLabel}
-              </button>
+              {isPurchasable ? (
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  disabled={!anyAvailForSelection}
+                  className={`w-full sm:w-auto rounded-lg ${nearBottom ? floatCtaPadding : floatCtaPadding} ${floatCtaText} text-white ${(!anyAvailForSelection) ? 'bg-gray-400' : 'bg-black hover:bg-gray-900'}`}
+                >
+                  {ctaLabel}
+                </button>
+              ) : (
+                <div className="w-full sm:w-auto rounded-lg px-5 py-2.5 bg-gray-200 text-gray-500 text-center font-medium">
+                  Coming Soon
+                </div>
+              )}
               {darazUrl && (
                 <div className="flex items-center justify-center text-gray-600 select-none">
                   {nearBottom ? (
