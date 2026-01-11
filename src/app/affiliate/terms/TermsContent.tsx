@@ -309,7 +309,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
         {/* Content - Urdu */}
         {lang === 'ur' && (
-          <div className="space-y-8 text-gray-800" dir="rtl">
+          <div className="space-y-8 text-gray-800 text-xl leading-relaxed" dir="rtl">
             {/* Important Note */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <p className="font-medium text-amber-800">اہم نوٹ</p>
@@ -318,7 +318,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 1 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">1. جائزہ</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">1. جائزہ</h2>
               <p>
                 AestheticPK افیلیئیٹ / پارٹنر پروگرام افراد اور کاروباروں کو AestheticPK کی مصنوعات کی سفارش کرنے اور کمیشن کمانے کی اجازت دیتا ہے، جب گاہک افیلیئیٹ کے ریفرل کوڈ کا استعمال کرتے ہوئے آرڈر دیتے ہیں۔ اس پروگرام میں شرکت ان شرائط و ضوابط کے تابع ہے۔
               </p>
@@ -326,7 +326,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 2 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">2. اہلیت</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">2. اہلیت</h2>
               <p>یہ پروگرام درج ذیل افراد کے لیے کھلا ہے:</p>
               <ul className="list-disc list-inside space-y-1 text-gray-700 mr-2">
                 <li>بیوٹیشنز، سیلون اور پارلر کا عملہ</li>
@@ -339,7 +339,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 3 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">3. ریفرل کوڈ اور اس کا درست استعمال</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">3. ریفرل کوڈ اور اس کا درست استعمال</h2>
               <p>ہر افیلیئیٹ کو ایک منفرد ریفرل کوڈ فراہم کیا جاتا ہے۔ کمیشن اور رعایت کے اطلاق کے لیے گاہک کا چیک آؤٹ کے وقت ریفرل کوڈ درج کرنا لازمی ہے۔</p>
               <p>افیلیئیٹس اپنا کوڈ WhatsApp، Instagram، دکان میں یا ذاتی طور پر شیئر کر سکتے ہیں۔</p>
               <p className="font-medium mt-2">افیلیئیٹس کو درج ذیل کاموں کی اجازت نہیں ہے:</p>
@@ -353,7 +353,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 4 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">4. گاہک کو دی جانے والی رعایت</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">4. گاہک کو دی جانے والی رعایت</h2>
               <p>جب گاہک درست افیلیئیٹ کوڈ استعمال کرتا ہے:</p>
               <ul className="list-disc list-inside space-y-1 text-gray-700 mr-2">
                 <li>گاہک کو ویب سائٹ پر ظاہر کی گئی رعایت دی جاتی ہے (جہاں لاگو ہو)</li>
@@ -363,7 +363,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 5 - Commission Schedule with Dynamic Table */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">5. کمیشن شیڈول</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">5. کمیشن شیڈول</h2>
               <p>افیلیئیٹ کمیشن ہر پروڈکٹ کے لیے AestheticPK کی جانب سے مقرر کیا جاتا ہے۔</p>
               <ul className="list-disc list-inside space-y-1 text-gray-700 mr-2">
                 <li>کمیشن: <strong>فکسڈ رقم فی یونٹ</strong> یا <strong>فیصد فی یونٹ</strong> (چیک آؤٹ پر ادا کی گئی اصل قیمت پر)</li>
@@ -408,7 +408,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 6 - Tier Table */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">6. کمیشن ٹیئرز</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">6. کمیشن ٹیئرز</h2>
               <p>افیلیئیٹس زیادہ کامیاب ڈیلیوریز کے ذریعے زیادہ کمیشن حاصل کر سکتے ہیں۔ ٹیئر ملٹی پلائر پروڈکٹ کے بنیادی کمیشن پر لاگو ہوتا ہے، چاہے کمیشن فکسڈ ہو یا فیصد۔</p>
               
               {tiers.length > 0 && (
@@ -440,7 +440,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 7 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">7. کمیشن کی حیثیت اور ہولڈ پیریڈ</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">7. کمیشن کی حیثیت اور ہولڈ پیریڈ</h2>
               <p>کمیشن درج ذیل مراحل سے گزرتا ہے:</p>
               <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
                 <p><strong>زیر التوا (Pending):</strong> آرڈر ڈیلیور ہو چکا ہے مگر ہولڈ پیریڈ میں ہے</p>
@@ -453,7 +453,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 8 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">8. پے آؤٹ شیڈول</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">8. پے آؤٹ شیڈول</h2>
               <ul className="list-disc list-inside space-y-1 text-gray-700 mr-2">
                 <li>پے آؤٹس ماہانہ بنیاد پر کیے جاتے ہیں، عموماً ہر ماہ کی 10 تاریخ کے قریب</li>
                 <li>صرف وہ کمیشن شامل کیے جاتے ہیں جو پے آؤٹ کے وقت قابل ادائیگی ہوں</li>
@@ -463,7 +463,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 9 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">9. واپسی، ریفنڈ اور منسوخی</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">9. واپسی، ریفنڈ اور منسوخی</h2>
               <ul className="list-disc list-inside space-y-1 text-gray-700 mr-2">
                 <li>اگر کوئی آرڈر پے آؤٹ سے پہلے منسوخ، واپس یا ریفنڈ ہو جائے تو متعلقہ کمیشن کالعدم (Void) کر دیا جائے گا اور ادا نہیں کیا جائے گا</li>
                 <li>ایک بار جب کمیشن ادا شدہ (Paid) ہو جائے تو وہ حتمی اور ناقابل واپسی تصور کیا جائے گا</li>
@@ -472,7 +472,7 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 10 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900 text-red-700">10. ناکام ڈیلیوری اور اسٹرائیک پالیسی (30 دن)</h2>
+              <h2 className="text-2xl font-semibold text-gray-900 text-red-700">10. ناکام ڈیلیوری اور اسٹرائیک پالیسی (30 دن)</h2>
               <p>کورئیر نقصانات کو کم کرنے کے لیے AestheticPK 30 دن کے اندر صارف کی وجہ سے ناکام ڈیلیوریز پر اسٹرائیک سسٹم استعمال کرتا ہے۔</p>
               
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
@@ -508,19 +508,19 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
 
             {/* Section 11 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">11. ٹیکس</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">11. ٹیکس</h2>
               <p>افیلیئیٹس اپنے کمیشن پر لاگو تمام ٹیکسز کی ادائیگی کے خود ذمہ دار ہوں گے۔ AestheticPK ٹیکس منہا نہیں کرتا اور ٹیکس مشورہ فراہم نہیں کرتا۔</p>
             </section>
 
             {/* Section 12 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">12. شرائط میں تبدیلی</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">12. شرائط میں تبدیلی</h2>
               <p>AestheticPK کسی بھی وقت ان شرائط و ضوابط میں تبدیلی کر سکتا ہے۔ تبدیلی کے بعد پروگرام میں شرکت جاری رکھنا نئی شرائط کی منظوری تصور ہوگا۔</p>
             </section>
 
             {/* Section 13 */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">13. رابطہ</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">13. رابطہ</h2>
               <p>افیلیئیٹ پروگرام کے بارے میں سوالات کے لیے رابطہ کریں: <a href="mailto:Aestheticsupplypk@gmail.com" className="text-emerald-600 hover:underline">Aestheticsupplypk@gmail.com</a></p>
             </section>
           </div>
