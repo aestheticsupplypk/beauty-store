@@ -201,11 +201,16 @@ export default function CartDrawer() {
         /* Desktop: right side drawer */
         sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[420px] sm:max-h-none sm:rounded-none sm:rounded-l-xl
       `}>
-        {/* Header */}
+        {/* Header with confirmation micro-copy */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">
-            Your Cart {itemCount > 0 && <span className="text-gray-500">({itemCount})</span>}
-          </h2>
+          <div>
+            <h2 className="text-lg font-semibold">
+              Your Cart {itemCount > 0 && <span className="text-gray-500">({itemCount})</span>}
+            </h2>
+            {itemCount > 0 && (
+              <p className="text-xs text-green-600 mt-0.5">Added to cart · COD available</p>
+            )}
+          </div>
           <button
             onClick={closeCart}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -273,21 +278,21 @@ export default function CartDrawer() {
           )}
         </div>
 
-        {/* Footer - Sticky CTA */}
+        {/* Footer - Sticky CTA with trust line */}
         {items.length > 0 && (
-          <div className="border-t p-4 bg-white">
-            <div className="flex items-center justify-between mb-3">
+          <div className="border-t p-5 bg-white">
+            <div className="flex items-center justify-between mb-4">
               <span className="text-gray-600">Subtotal</span>
-              <span className="text-lg font-semibold">PKR {subtotal.toLocaleString()}</span>
+              <span className="text-xl font-bold">PKR {subtotal.toLocaleString()}</span>
             </div>
             <button
               onClick={handleCheckout}
-              className="w-full py-3 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
+              className="w-full py-3.5 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors text-base"
             >
               Proceed to Checkout
             </button>
-            <p className="text-xs text-gray-500 text-center mt-2">
-              Shipping calculated at checkout
+            <p className="text-xs text-gray-500 text-center mt-3">
+              Cash on Delivery · 24–48h Dispatch
             </p>
           </div>
         )}
@@ -296,7 +301,7 @@ export default function CartDrawer() {
   );
 }
 
-// Cart item row component
+// Cart item row component - visually softened with more spacing
 function CartItemRow({ 
   item, 
   onUpdateQuantity, 
@@ -307,41 +312,41 @@ function CartItemRow({
   onRemove: (variantId: string) => void;
 }) {
   return (
-    <div className="flex gap-3 p-2 border rounded-lg">
+    <div className="flex gap-4 p-3 bg-gray-50 rounded-xl">
       {item.thumbUrl && (
         <img 
           src={item.thumbUrl} 
           alt={item.productName}
-          className="w-16 h-16 object-contain rounded"
+          className="w-20 h-20 object-contain rounded-lg bg-white"
         />
       )}
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm truncate">{item.productName}</div>
+        <div className="font-medium truncate">{item.productName}</div>
         {item.variantLabel && (
-          <div className="text-xs text-gray-500">{item.variantLabel}</div>
+          <div className="text-sm text-gray-500 mt-0.5">{item.variantLabel}</div>
         )}
-        <div className="text-sm text-gray-700 mt-1">
+        <div className="text-base font-semibold text-gray-900 mt-2">
           PKR {item.price.toLocaleString()}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-2">
+      <div className="flex flex-col items-end justify-between">
         <button
           onClick={() => onRemove(item.variantId)}
-          className="text-xs text-red-600 hover:underline"
+          className="text-xs text-gray-400 hover:text-red-600 transition-colors"
         >
           Remove
         </button>
-        <div className="flex items-center gap-1 border rounded">
+        <div className="flex items-center gap-1 bg-white border rounded-lg">
           <button
             onClick={() => onUpdateQuantity(item.variantId, item.quantity - 1)}
-            className="px-2 py-1 text-gray-600 hover:bg-gray-100"
+            className="px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-l-lg"
           >
             −
           </button>
-          <span className="px-2 text-sm font-medium">{item.quantity}</span>
+          <span className="px-3 py-2 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
           <button
             onClick={() => onUpdateQuantity(item.variantId, item.quantity + 1)}
-            className="px-2 py-1 text-gray-600 hover:bg-gray-100"
+            className="px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-r-lg"
           >
             +
           </button>

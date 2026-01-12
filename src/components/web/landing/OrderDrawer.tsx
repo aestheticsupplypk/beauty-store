@@ -265,11 +265,17 @@ export default function OrderDrawer({ open, onClose, colors, models, packages, s
 
   return (
     <div className="fixed inset-0 z-50">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30" onClick={() => !loading && onClose()} />
+      {/* Backdrop - softer dim */}
+      <div className="absolute inset-0 bg-black/40" onClick={() => !loading && onClose()} />
 
-      {/* Drawer */}
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-xl bg-white shadow-xl p-6 overflow-y-auto rounded-l-lg">
+      {/* Drawer - Mobile: bottom sheet, Desktop: right side */}
+      <div className="
+        absolute bg-white shadow-xl overflow-y-auto
+        /* Mobile: bottom sheet with rounded top */
+        inset-x-0 bottom-0 max-h-[90vh] rounded-t-2xl p-5
+        /* Desktop: right side drawer */
+        sm:inset-y-0 sm:right-0 sm:left-auto sm:bottom-auto sm:w-full sm:max-w-xl sm:max-h-none sm:rounded-l-xl sm:rounded-t-none sm:p-6
+      ">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             {logoUrl && (

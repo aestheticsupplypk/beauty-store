@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     const productIds = Array.from(new Set((variantData || []).map(v => v.product_id)));
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, parlour_allow_cod, parlour_allow_advance')
+      .select('id, name, parlour_allow_cod, parlour_allow_advance, parlour_min_qty, parlour_max_qty')
       .in('id', productIds);
     
     // Validate payment method is allowed by all products
@@ -80,6 +80,12 @@ export async function POST(req: Request) {
       }
     }
 
+    // Build variant-to-product map for MOQ validation
+    const variantToProduct: Record<string, string> = {};
+    for (const v of variantData || []) {
+      variantToProduct[v.id] = v.product_id;
+    }
+
     // Validate items and calculate totals
     let totalQty = 0;
     let totalAmount = 0;
@@ -89,6 +95,7 @@ export async function POST(req: Request) {
       unit_price: number;
       line_total: number;
       applied_tier_min_qty: number | null;
+      pricing_context: string;
     }> = [];
 
     for (const item of items) {
@@ -96,6 +103,26 @@ export async function POST(req: Request) {
 
       if (!variant_id || !qty || qty < 1 || !unit_price || unit_price < 0) {
         return NextResponse.json({ error: 'Invalid item data' }, { status: 400 });
+      }
+
+      // Enforce MOQ and Max Qty per product
+      const productId = variantToProduct[variant_id];
+      const product = (productData || []).find(p => p.id === productId);
+      if (product) {
+        const minQty = product.parlour_min_qty ?? 1;
+        const maxQty = product.parlour_max_qty;
+        
+        if (qty < minQty) {
+          return NextResponse.json({ 
+            error: `Minimum order quantity for ${product.name} is ${minQty}` 
+          }, { status: 400 });
+        }
+        
+        if (maxQty && qty > maxQty) {
+          return NextResponse.json({ 
+            error: `Maximum order quantity for ${product.name} is ${maxQty} per order` 
+          }, { status: 400 });
+        }
       }
 
       // Check inventory
@@ -123,6 +150,7 @@ export async function POST(req: Request) {
         unit_price,
         line_total: lineTotal,
         applied_tier_min_qty,
+        pricing_context: 'parlour',
       });
     }
 
@@ -171,7 +199,7 @@ export async function POST(req: Request) {
 
     // Create order lines and reserve inventory
     for (const line of orderLines) {
-      // Insert order line with applied tier info
+      // Insert order line with applied tier info and pricing context
       await supabase.from('order_lines').insert({
         order_id: order.id,
         variant_id: line.variant_id,
@@ -179,6 +207,7 @@ export async function POST(req: Request) {
         unit_price: line.unit_price,
         line_total: line.line_total,
         applied_tier_min_qty: line.applied_tier_min_qty,
+        pricing_context: line.pricing_context,
       });
 
       // Reserve inventory - increment the reserved count

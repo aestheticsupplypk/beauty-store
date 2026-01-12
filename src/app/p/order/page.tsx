@@ -3,15 +3,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type Product = {
   id: string;
   name: string;
   active: boolean;
-  image?: string;
   parlour_allow_cod?: boolean;
   parlour_allow_advance?: boolean;
-  parlour_message?: string;
+  parlour_message?: string | null;
+  parlour_min_qty?: number;
+  parlour_max_qty?: number | null;
+  image?: string;
 };
 
 type Variant = {
@@ -53,6 +56,7 @@ type Parlour = {
   min_order_value: number | null;
   address: string | null;
   city: string | null;
+  province_code: string | null;
   phone: string | null;
 };
 
@@ -89,6 +93,8 @@ export default function ParlourOrderPage() {
   // Shipping address (editable)
   const [shippingAddress, setShippingAddress] = useState<string>('');
   const [shippingCity, setShippingCity] = useState<string>('');
+  const [shippingProvince, setShippingProvince] = useState<string>('');
+  const [useCustomAddress, setUseCustomAddress] = useState<boolean>(false);
 
   // Check auth and load data
   useEffect(() => {
@@ -128,10 +134,11 @@ export default function ParlourOrderPage() {
       // Initialize shipping address from parlour data
       setShippingAddress(parlourData.address || '');
       setShippingCity(parlourData.city || '');
+      setShippingProvince(parlourData.province_code || '');
 
       // Load products, variants, inventory, pricing tiers, and shipping rules
       const [productsRes, variantsRes, inventoryRes, tiersRes, shippingRes] = await Promise.all([
-        supabase.from('products').select('id, name, active, parlour_allow_cod, parlour_allow_advance, parlour_message').eq('active', true).order('name').then(async (res) => {
+        supabase.from('products').select('id, name, active, parlour_allow_cod, parlour_allow_advance, parlour_message, parlour_min_qty, parlour_max_qty').eq('active', true).order('name').then(async (res) => {
           // Fetch first image for each product
           const products = res.data ?? [];
           const productIds = products.map(p => p.id);
@@ -174,14 +181,20 @@ export default function ParlourOrderPage() {
   // Get variants for selected product
   const productVariants = variants.filter((v) => v.product_id === selectedProductId);
 
-  // Auto-select variant if only one
+  // Auto-select variant if only one, and set qty to MOQ
   useEffect(() => {
     if (productVariants.length === 1) {
       setSelectedVariantId(productVariants[0].id);
     } else {
       setSelectedVariantId('');
     }
-  }, [selectedProductId, productVariants.length]);
+    // Set qty to MOQ when product changes
+    const product = products.find((p) => p.id === selectedProductId);
+    if (product) {
+      const minQty = product.parlour_min_qty ?? 1;
+      setQtyInput(minQty.toString());
+    }
+  }, [selectedProductId, productVariants.length, products]);
 
   // Calculate parlour price for a product/qty and return applied tier info
   const getParlourPriceWithTier = useCallback((productId: string, retailPrice: number, quantity: number): { price: number; appliedTierMinQty: number | null } => {
@@ -226,6 +239,20 @@ export default function ParlourOrderPage() {
     const product = products.find((p) => p.id === selectedProductId);
     const variant = variants.find((v) => v.id === selectedVariantId);
     if (!product || !variant) return;
+
+    // Enforce MOQ
+    const minQty = product.parlour_min_qty ?? 1;
+    if (qty < minQty) {
+      setError(`Minimum order quantity for this product is ${minQty}`);
+      return;
+    }
+
+    // Enforce Max Qty
+    const maxQty = product.parlour_max_qty;
+    if (maxQty && qty > maxQty) {
+      setError(`Maximum order quantity for this product is ${maxQty} per order`);
+      return;
+    }
 
     const available = getAvailable(selectedVariantId);
     if (qty > available) {
@@ -439,6 +466,26 @@ export default function ParlourOrderPage() {
         </div>
       </header>
 
+      {/* Tabs */}
+      <div className="bg-white border-b">
+        <div className="max-w-4xl mx-auto px-4">
+          <nav className="flex gap-6">
+            <Link
+              href="/p/order"
+              className="py-3 text-sm font-medium text-black border-b-2 border-black"
+            >
+              Order
+            </Link>
+            <Link
+              href="/p/profile"
+              className="py-3 text-sm text-gray-500 hover:text-black border-b-2 border-transparent"
+            >
+              Profile
+            </Link>
+          </nav>
+        </div>
+      </div>
+
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -518,25 +565,72 @@ export default function ParlourOrderPage() {
                 value={qtyInput}
                 onChange={(e) => setQtyInput(e.target.value)}
                 onBlur={() => {
+                  const product = products.find((p) => p.id === selectedProductId);
+                  const minQty = product?.parlour_min_qty ?? 1;
+                  const maxQty = product?.parlour_max_qty;
                   const val = parseInt(qtyInput);
-                  if (isNaN(val) || val < 1) setQtyInput('1');
+                  if (isNaN(val) || val < minQty) setQtyInput(minQty.toString());
+                  else if (maxQty && val > maxQty) setQtyInput(maxQty.toString());
                 }}
-                min="1"
+                min={products.find((p) => p.id === selectedProductId)?.parlour_min_qty ?? 1}
+                max={products.find((p) => p.id === selectedProductId)?.parlour_max_qty ?? undefined}
                 className="w-full border rounded px-3 py-2"
               />
             </div>
 
             <div className="flex items-end">
-              <button
-                onClick={addToCart}
-                disabled={!selectedProductId || !selectedVariantId}
-                className="w-full bg-black text-white rounded px-4 py-2 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add to Cart
-              </button>
+              {(() => {
+                const product = products.find((p) => p.id === selectedProductId);
+                const minQty = product?.parlour_min_qty ?? 1;
+                const maxQty = product?.parlour_max_qty;
+                const isQtyValid = qty >= minQty && (!maxQty || qty <= maxQty);
+                return (
+                  <button
+                    onClick={addToCart}
+                    disabled={!selectedProductId || !selectedVariantId || !isQtyValid}
+                    className="w-full bg-black text-white rounded px-4 py-2 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Add to Cart
+                  </button>
+                );
+              })()}
             </div>
             </div>
           </div>
+
+          {/* MOQ/Max info and validation warning */}
+          {selectedProductId && (() => {
+            const selectedProduct = products.find(p => p.id === selectedProductId);
+            if (!selectedProduct) return null;
+            const minQty = selectedProduct.parlour_min_qty ?? 1;
+            const maxQty = selectedProduct.parlour_max_qty;
+            const isBelowMin = qty < minQty;
+            const isAboveMax = maxQty && qty > maxQty;
+            
+            return (
+              <>
+                {/* Warning when qty is invalid */}
+                {isBelowMin && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+                    <strong>Minimum quantity is {minQty}</strong> — please enter at least {minQty} units to add to cart.
+                  </div>
+                )}
+                {isAboveMax && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+                    <strong>Maximum quantity is {maxQty}</strong> — please enter no more than {maxQty} units per order.
+                  </div>
+                )}
+                {/* Info display when qty is valid */}
+                {!isBelowMin && !isAboveMax && (minQty > 1 || maxQty) && (
+                  <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2 rounded-lg text-sm">
+                    {minQty > 1 && <span>Min order: <strong>{minQty} units</strong></span>}
+                    {minQty > 1 && maxQty && <span> · </span>}
+                    {maxQty && <span>Max per order: <strong>{maxQty} units</strong></span>}
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Special message */}
           {selectedProductId && (() => {
@@ -685,26 +779,90 @@ export default function ParlourOrderPage() {
                     <label className="block text-sm text-gray-600 mb-1">Parlour Name</label>
                     <div className="font-medium">{parlour?.name}</div>
                   </div>
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">Shipping Address</label>
+                  
+                  {/* Default address display (read-only) */}
+                  {!useCustomAddress && (
+                    <>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Shipping Address</label>
+                        <div className="text-sm bg-gray-100 px-3 py-2 rounded text-gray-700">
+                          {parlour?.address || <span className="text-gray-400 italic">Not set in profile</span>}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">City</label>
+                          <div className="text-sm bg-gray-100 px-3 py-2 rounded text-gray-700">
+                            {parlour?.city || <span className="text-gray-400 italic">Not set</span>}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">Province</label>
+                          <div className="text-sm bg-gray-100 px-3 py-2 rounded text-gray-700">
+                            {parlour?.province_code || <span className="text-gray-400 italic">Not set</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Custom address inputs (editable) */}
+                  {useCustomAddress && (
+                    <>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Shipping Address</label>
+                        <input
+                          type="text"
+                          value={shippingAddress}
+                          onChange={(e) => setShippingAddress(e.target.value)}
+                          placeholder="Enter shipping address"
+                          className="w-full border rounded px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">City</label>
+                          <input
+                            type="text"
+                            value={shippingCity}
+                            onChange={(e) => setShippingCity(e.target.value)}
+                            placeholder="Enter city"
+                            className="w-full border rounded px-3 py-2 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">Province</label>
+                          <input
+                            type="text"
+                            value={shippingProvince}
+                            onChange={(e) => setShippingProvince(e.target.value)}
+                            placeholder="Enter province"
+                            className="w-full border rounded px-3 py-2 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Toggle for custom address */}
+                  <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
                     <input
-                      type="text"
-                      value={shippingAddress}
-                      onChange={(e) => setShippingAddress(e.target.value)}
-                      placeholder="Enter shipping address"
-                      className="w-full border rounded px-3 py-2 text-sm"
+                      type="checkbox"
+                      checked={useCustomAddress}
+                      onChange={(e) => {
+                        setUseCustomAddress(e.target.checked);
+                        if (!e.target.checked) {
+                          // Reset to parlour defaults
+                          setShippingAddress(parlour?.address || '');
+                          setShippingCity(parlour?.city || '');
+                          setShippingProvince(parlour?.province_code || '');
+                        }
+                      }}
+                      className="rounded"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">City</label>
-                    <input
-                      type="text"
-                      value={shippingCity}
-                      onChange={(e) => setShippingCity(e.target.value)}
-                      placeholder="Enter city"
-                      className="w-full border rounded px-3 py-2 text-sm"
-                    />
-                  </div>
+                    <span className="text-gray-600">Ship to a different address</span>
+                  </label>
+
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">Phone</label>
                     <div className="text-sm">{parlour?.phone || 'Not provided'}</div>

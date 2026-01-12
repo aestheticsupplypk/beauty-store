@@ -21,10 +21,15 @@ export default function ParlourPricingPanel({ productId }: ParlourPricingPanelPr
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   // Payment method options
   const [allowCod, setAllowCod] = useState<boolean>(true);
   const [allowAdvance, setAllowAdvance] = useState<boolean>(true);
+
+  // MOQ and Max Qty
+  const [parlourMinQty, setParlourMinQty] = useState<number>(1);
+  const [parlourMaxQty, setParlourMaxQty] = useState<string>('');
 
   // Special message
   const [parlourMessage, setParlourMessage] = useState<string>('');
@@ -38,10 +43,10 @@ export default function ParlourPricingPanel({ productId }: ParlourPricingPanelPr
   const fetchTiers = useCallback(async () => {
     setLoading(true);
     
-    // Fetch product payment method settings and message
+    // Fetch product payment method settings, MOQ, and message
     const { data: productData } = await supabaseBrowser
       .from('products')
-      .select('parlour_allow_cod, parlour_allow_advance, parlour_message')
+      .select('parlour_allow_cod, parlour_allow_advance, parlour_message, parlour_min_qty, parlour_max_qty')
       .eq('id', productId)
       .single();
     
@@ -49,6 +54,8 @@ export default function ParlourPricingPanel({ productId }: ParlourPricingPanelPr
       setAllowCod(productData.parlour_allow_cod ?? true);
       setAllowAdvance(productData.parlour_allow_advance ?? true);
       setParlourMessage(productData.parlour_message ?? '');
+      setParlourMinQty(productData.parlour_min_qty ?? 1);
+      setParlourMaxQty(productData.parlour_max_qty?.toString() ?? '');
     }
     
     const { data, error } = await supabaseBrowser
@@ -178,6 +185,8 @@ export default function ParlourPricingPanel({ productId }: ParlourPricingPanelPr
 
     if (updateError) {
       setError(updateError.message);
+    } else {
+      setLastSaved(new Date());
     }
   };
 
@@ -189,6 +198,36 @@ export default function ParlourPricingPanel({ productId }: ParlourPricingPanelPr
 
     if (updateError) {
       setError(updateError.message);
+    } else {
+      setLastSaved(new Date());
+    }
+  };
+
+  const updateMoqSettings = async (minQty: number, maxQty: string) => {
+    // Validate
+    if (minQty < 1) {
+      setError('Minimum quantity must be at least 1');
+      return;
+    }
+    const maxQtyNum = maxQty ? parseInt(maxQty) : null;
+    if (maxQtyNum !== null && maxQtyNum < minQty) {
+      setError('Maximum quantity must be greater than or equal to minimum quantity');
+      return;
+    }
+
+    setError(null);
+    const { error: updateError } = await supabaseBrowser
+      .from('products')
+      .update({ 
+        parlour_min_qty: minQty, 
+        parlour_max_qty: maxQtyNum 
+      })
+      .eq('id', productId);
+
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setLastSaved(new Date());
     }
   };
 
@@ -205,6 +244,11 @@ export default function ParlourPricingPanel({ productId }: ParlourPricingPanelPr
     <section className="border rounded p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Parlour Pricing</h2>
+        {lastSaved && (
+          <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+            ✓ Saved {lastSaved.toLocaleTimeString()}
+          </span>
+        )}
       </div>
 
       <p className="text-sm text-gray-600">
@@ -216,6 +260,39 @@ export default function ParlourPricingPanel({ productId }: ParlourPricingPanelPr
           {error}
         </div>
       )}
+
+      {/* MOQ and Max Qty */}
+      <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-3">
+        <h3 className="text-sm font-medium text-amber-800">Order Quantity Limits</h3>
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <label className="block text-xs font-medium mb-1">Min Qty (MOQ)</label>
+            <input
+              type="number"
+              value={parlourMinQty}
+              onChange={(e) => setParlourMinQty(parseInt(e.target.value) || 1)}
+              onBlur={() => updateMoqSettings(parlourMinQty, parlourMaxQty)}
+              min="1"
+              className="w-24 border rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">Max Qty per Order</label>
+            <input
+              type="number"
+              value={parlourMaxQty}
+              onChange={(e) => setParlourMaxQty(e.target.value)}
+              onBlur={() => updateMoqSettings(parlourMinQty, parlourMaxQty)}
+              placeholder="No limit"
+              min="1"
+              className="w-24 border rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-amber-700">
+          MOQ: Minimum quantity a parlour must order. Max Qty: Optional cap per order to prevent excessive bulk orders.
+        </p>
+      </div>
 
       {/* Payment Method Options */}
       <div className="bg-gray-50 border rounded p-3 space-y-2">

@@ -477,9 +477,38 @@ export default function BuyPanel({ colors, models, packages, sizes, matrix, colo
         productSlug={productSlug}
       />
 
-      {/* Floating buy panel that follows scrolling; grows near bottom */}
+      {/* Mobile sticky bottom bar - always visible on mobile when scrolled */}
+      {showFloatCTA && !drawerOpen && (
+        <div className="fixed inset-x-0 bottom-0 z-40 sm:hidden bg-white border-t shadow-lg safe-area-pb">
+          {/* Trust line above CTA */}
+          <div className="px-4 pt-2 pb-1 text-center">
+            <p className="text-xs text-gray-600">⭐ Trusted by salons across Pakistan</p>
+          </div>
+          <div className="px-4 pb-3 flex items-center justify-between gap-4">
+            <div>
+              <div className="text-lg font-bold">{price != null ? `PKR ${Number(price).toLocaleString()}` : '—'}</div>
+              <div className="text-xs text-gray-500">COD • 24–48h Dispatch</div>
+            </div>
+            {isPurchasable ? (
+              <button
+                onClick={() => setDrawerOpen(true)}
+                disabled={!anyAvailForSelection}
+                className={`flex-shrink-0 px-6 py-3 rounded-lg font-medium text-white ${(!anyAvailForSelection) ? 'bg-gray-400' : 'bg-black hover:bg-gray-900'}`}
+              >
+                {ctaLabel}
+              </button>
+            ) : (
+              <div className="flex-shrink-0 px-6 py-3 rounded-lg bg-gray-200 text-gray-500 font-medium">
+                Coming Soon
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop floating buy panel that follows scrolling; grows near bottom */}
       {(showFloatCTA || nearBottom) && !drawerOpen && (
-        <div className={`fixed right-4 z-40 max-w-[95vw] ${nearBottom ? 'bottom-6 w-[483px]' : 'bottom-4 w-[345px]'}`}>
+        <div className={`hidden sm:block fixed right-4 z-40 max-w-[95vw] ${nearBottom ? 'bottom-6 w-[483px]' : 'bottom-4 w-[345px]'}`}>
           <div className="border rounded-lg bg-white shadow-lg p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">Price</div>
