@@ -24,28 +24,33 @@ export default function ResetPasswordPage() {
         const refreshToken = hashParams.get('refresh_token');
         const type = hashParams.get('type');
         
-        if (accessToken && type === 'recovery') {
+        if (accessToken) {
           // Set the session from the recovery tokens
-          const { error: sessionError } = await supabase.auth.setSession({
+          const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
           });
           
           if (sessionError) {
+            console.error('Session error:', sessionError);
             setError('Invalid or expired reset link. Please request a new password reset.');
             return;
           }
           
+          console.log('Session set successfully:', data);
           // Clear the hash from URL
           window.history.replaceState(null, '', window.location.pathname);
           return;
         }
       }
       
+      // Small delay to allow session to be established
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Check if we have a valid session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setError('Invalid or expired reset link. Please request a new password reset.');
+        setError('Auth session missing. Please click the reset link from your email again.');
       }
     };
     handleRecoveryToken();
