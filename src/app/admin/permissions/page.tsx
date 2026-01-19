@@ -2,37 +2,19 @@ import { requireAdmin } from '@/lib/auth';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import PermissionsEditor from './PermissionsEditor';
 
-async function fetchProfiles() {
+async function fetchAdminUsers() {
   const supabase = getSupabaseServerClient();
   
-  // Get all profiles
-  const { data: profiles, error } = await supabase
-    .from('profiles')
+  // Get all admin users from the dedicated admin_users table
+  const { data, error } = await supabase
+    .from('admin_users')
     .select(
       'id, email, is_admin_full, can_admin_dashboard, can_admin_orders, can_admin_inventory, can_admin_products, can_admin_reviews, can_admin_shipping, can_admin_affiliates, can_admin_parlours'
     )
     .order('email', { ascending: true });
   if (error) throw error;
 
-  // Get parlour emails to exclude
-  const { data: parlours } = await supabase
-    .from('parlours')
-    .select('email');
-  const parlourEmails = new Set((parlours ?? []).map((p: any) => p.email?.toLowerCase()));
-
-  // Get affiliate emails to exclude
-  const { data: affiliates } = await supabase
-    .from('affiliates')
-    .select('email');
-  const affiliateEmails = new Set((affiliates ?? []).map((a: any) => a.email?.toLowerCase()));
-
-  // Filter out parlours and affiliates - only show manually created admin users
-  const filteredProfiles = (profiles ?? []).filter((p: any) => {
-    const email = p.email?.toLowerCase();
-    return !parlourEmails.has(email) && !affiliateEmails.has(email);
-  });
-
-  return filteredProfiles.map((p: any) => ({
+  return (data ?? []).map((p: any) => ({
     id: p.id,
     email: p.email,
     is_admin_full: Boolean(p.is_admin_full),
@@ -49,7 +31,7 @@ async function fetchProfiles() {
 
 export default async function AdminPermissionsPage() {
   await requireAdmin();
-  const profiles = await fetchProfiles();
+  const adminUsers = await fetchAdminUsers();
 
-  return <PermissionsEditor initialProfiles={profiles} />;
+  return <PermissionsEditor initialProfiles={adminUsers} />;
 }

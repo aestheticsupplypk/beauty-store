@@ -15,12 +15,12 @@ export async function POST(req: Request) {
 
     const supabase = getSupabaseServerClient();
 
-    // Update each profile
+    // Update each admin user
     for (const p of profiles) {
       if (!p.id) continue;
 
       await supabase
-        .from('profiles')
+        .from('admin_users')
         .update({
           is_admin_full: Boolean(p.is_admin_full),
           can_admin_dashboard: Boolean(p.can_admin_dashboard),

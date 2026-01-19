@@ -19,13 +19,13 @@ export async function getSessionAndProfile() {
 
   if (!session?.user) return { session: null, profile: null } as const;
 
+  // Check admin_users table for admin permissions
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('admin_users')
     .select(
       [
         'id',
         'email',
-        'is_admin',
         'is_admin_full',
         'can_admin_dashboard',
         'can_admin_orders',
