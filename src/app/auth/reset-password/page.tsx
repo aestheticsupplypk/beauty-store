@@ -15,15 +15,40 @@ export default function ResetPasswordPage() {
   const supabase = createClientComponentClient();
 
   useEffect(() => {
-    // Check if we have a valid session from the reset link
-    const checkSession = async () => {
+    // Handle the hash fragment from Supabase recovery link
+    const handleRecoveryToken = async () => {
+      // Check if there's a hash with access_token (recovery link)
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
+        
+        if (accessToken && type === 'recovery') {
+          // Set the session from the recovery tokens
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+          });
+          
+          if (sessionError) {
+            setError('Invalid or expired reset link. Please request a new password reset.');
+            return;
+          }
+          
+          // Clear the hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+          return;
+        }
+      }
+      
+      // Check if we have a valid session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        // No session means the reset link might be invalid or expired
         setError('Invalid or expired reset link. Please request a new password reset.');
       }
     };
-    checkSession();
+    handleRecoveryToken();
   }, [supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
