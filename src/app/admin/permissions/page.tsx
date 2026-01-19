@@ -1,9 +1,10 @@
-import { requireAdmin } from '@/lib/auth';
-import { getSupabaseServerClient } from '@/lib/supabaseServer';
+import { requireAdmin, getSessionAndProfile } from '@/lib/auth';
+import { getSupabaseServiceRoleClient } from '@/lib/supabaseServiceRole';
 import PermissionsEditor from './PermissionsEditor';
 
 async function fetchAdminUsers() {
-  const supabase = getSupabaseServerClient();
+  // Use service role to bypass RLS and list all admin users
+  const supabase = getSupabaseServiceRoleClient();
   
   // Get all admin users from the dedicated admin_users table
   const { data, error } = await supabase
@@ -31,7 +32,17 @@ async function fetchAdminUsers() {
 
 export default async function AdminPermissionsPage() {
   await requireAdmin();
+  const { session, profile } = await getSessionAndProfile();
   const adminUsers = await fetchAdminUsers();
 
-  return <PermissionsEditor initialProfiles={adminUsers} />;
+  const currentUserIsFullAdmin = Boolean((profile as any)?.is_admin_full);
+  const currentUserId = session?.user?.id || '';
+
+  return (
+    <PermissionsEditor 
+      initialProfiles={adminUsers} 
+      currentUserIsFullAdmin={currentUserIsFullAdmin}
+      currentUserId={currentUserId}
+    />
+  );
 }

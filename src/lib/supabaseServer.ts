@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 
 export function getSupabaseServerClient() {
   const cookieStore = cookies();
@@ -12,11 +12,17 @@ export function getSupabaseServerClient() {
 
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll: () => cookieStore.getAll(),
+      setAll: (cookiesToSet) => {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // setAll can fail in Server Components (read-only context)
+          // This is expected and safe to ignore
+        }
       },
-      // no-op in Server Components
-      set(_name: string, _value: string, _options: CookieOptions) {},
     },
   });
 }

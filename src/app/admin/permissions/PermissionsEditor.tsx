@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import AddAdminPanel from './AddAdminPanel';
 
 type Profile = {
   id: string;
@@ -19,6 +20,8 @@ type Profile = {
 
 type PermissionsEditorProps = {
   initialProfiles: Profile[];
+  currentUserIsFullAdmin: boolean;
+  currentUserId: string;
 };
 
 const SECTION_KEYS = [
@@ -45,12 +48,14 @@ const SECTION_LABELS: Record<string, string> = {
   can_admin_parlours: 'Parlours',
 };
 
-export default function PermissionsEditor({ initialProfiles }: PermissionsEditorProps) {
+export default function PermissionsEditor({ initialProfiles, currentUserIsFullAdmin, currentUserId }: PermissionsEditorProps) {
   const router = useRouter();
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles);
   const [originalProfiles, setOriginalProfiles] = useState<Profile[]>(initialProfiles);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Check if there are unsaved changes
   const hasChanges = JSON.stringify(profiles) !== JSON.stringify(originalProfiles);
@@ -149,6 +154,66 @@ export default function PermissionsEditor({ initialProfiles }: PermissionsEditor
     }
   }, [profiles, router]);
 
+  // Remove admin access
+  const handleRemoveAdmin = useCallback(async (targetUserId: string, email: string) => {
+    if (!confirm(`Are you sure you want to remove admin access for ${email}? They will no longer be able to access the admin panel.`)) {
+      return;
+    }
+
+    setActionLoading(targetUserId);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/admin/users/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to remove admin');
+      }
+
+      router.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  }, [router]);
+
+  // Send password reset link
+  const handleResetPassword = useCallback(async (targetUserId: string, email: string) => {
+    if (!confirm(`Send password reset link to ${email}?`)) {
+      return;
+    }
+
+    setActionLoading(`reset-${targetUserId}`);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send reset link');
+      }
+
+      alert(`Password reset link sent to ${email}`);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Unsaved changes notification bar */}
@@ -177,10 +242,22 @@ export default function PermissionsEditor({ initialProfiles }: PermissionsEditor
       {/* Add top padding when notification bar is visible */}
       {hasChanges && <div className="h-14" />}
 
-      <h1 className="text-2xl font-semibold">Admin Permissions</h1>
-      <p className="text-sm text-gray-600">
-        Manage which sections each user can access. Full Admin grants access to all sections.
-      </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Admin Permissions</h1>
+          <p className="text-sm text-gray-600">
+            Manage which sections each user can access. Full Admin grants access to all sections.
+          </p>
+        </div>
+        {currentUserIsFullAdmin && (
+          <button
+            onClick={() => setShowAddPanel(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700"
+          >
+            + Add Admin
+          </button>
+        )}
+      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -198,6 +275,9 @@ export default function PermissionsEditor({ initialProfiles }: PermissionsEditor
                   {SECTION_LABELS[key]}
                 </th>
               ))}
+              {currentUserIsFullAdmin && (
+                <th className="py-2 px-3 border-b text-center">Actions</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -227,11 +307,37 @@ export default function PermissionsEditor({ initialProfiles }: PermissionsEditor
                     </td>
                   );
                 })}
+                {currentUserIsFullAdmin && (
+                  <td className="py-2 px-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleResetPassword(p.id, p.email || '')}
+                        disabled={actionLoading === `reset-${p.id}`}
+                        className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50"
+                        title="Send password reset link"
+                      >
+                        {actionLoading === `reset-${p.id}` ? '...' : '🔑 Reset'}
+                      </button>
+                      {p.id !== currentUserId && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAdmin(p.id, p.email || '')}
+                          disabled={actionLoading === p.id}
+                          className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded disabled:opacity-50"
+                          title="Remove admin access"
+                        >
+                          {actionLoading === p.id ? '...' : '🗑️ Remove'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
             {profiles.length === 0 && (
               <tr>
-                <td colSpan={SECTION_KEYS.length + 1} className="py-4 text-center text-gray-500">
+                <td colSpan={SECTION_KEYS.length + (currentUserIsFullAdmin ? 2 : 1)} className="py-4 text-center text-gray-500">
                   No users found.
                 </td>
               </tr>
@@ -249,6 +355,13 @@ export default function PermissionsEditor({ initialProfiles }: PermissionsEditor
           <li>Changed checkboxes are highlighted with an orange ring.</li>
         </ul>
       </div>
+
+      {/* Add Admin Panel */}
+      <AddAdminPanel
+        isOpen={showAddPanel}
+        onClose={() => setShowAddPanel(false)}
+        onSuccess={() => router.refresh()}
+      />
     </div>
   );
 }
