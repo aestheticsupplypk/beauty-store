@@ -15,6 +15,19 @@ export default function ResetPasswordPage() {
   const supabase = createClientComponentClient();
 
   useEffect(() => {
+    // Listen for auth state changes (including PASSWORD_RECOVERY event)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event, session);
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        // Session is ready for password update
+        setError(null);
+      } else if (event === 'SIGNED_IN' && session) {
+        // Also handle SIGNED_IN event
+        setError(null);
+      }
+    });
+
     // Handle the hash fragment from Supabase recovery link
     const handleRecoveryToken = async () => {
       // Check if there's a hash with access_token (recovery link)
@@ -22,7 +35,6 @@ export default function ResetPasswordPage() {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
-        const type = hashParams.get('type');
         
         if (accessToken) {
           // Set the session from the recovery tokens
@@ -44,16 +56,24 @@ export default function ResetPasswordPage() {
         }
       }
       
-      // Small delay to allow session to be established
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       // Check if we have a valid session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setError('Auth session missing. Please click the reset link from your email again.');
+        // Don't show error immediately - wait for auth state change
+        setTimeout(async () => {
+          const { data: { session: retrySession } } = await supabase.auth.getSession();
+          if (!retrySession) {
+            setError('Auth session missing. Please click the reset link from your email again.');
+          }
+        }, 1000);
       }
     };
+    
     handleRecoveryToken();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
