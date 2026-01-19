@@ -14,16 +14,7 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  useEffect(() => {
-    // Check if we have a valid session (set by /auth/confirm route)
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setError('Session expired. Please request a new password reset link.');
-      }
-    };
-    checkSession();
-  }, [supabase]);
+  // No session check on mount - we'll handle errors on submit
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
