@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { updatePassword } from './actions';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -12,9 +12,6 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const router = useRouter();
-  const supabase = createClientComponentClient();
-
-  // No session check on mount - we'll handle errors on submit
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,14 +29,13 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
 
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: password,
-    });
+    // Use server action to update password (server can read httpOnly cookies)
+    const result = await updatePassword(password);
 
     setLoading(false);
 
-    if (updateError) {
-      setError(updateError.message);
+    if (!result.success) {
+      setError(result.error || 'Failed to update password');
       return;
     }
 
