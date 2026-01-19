@@ -5,7 +5,6 @@ import { Inter } from 'next/font/google';
 import { SITE_URL } from '@/lib/site';
 import { CartProvider } from '@/contexts/CartContext';
 import CartDrawer from '@/components/web/cart/CartDrawer';
-import AuthRedirectHandler from '@/components/AuthRedirectHandler';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,7 +23,6 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <CartProvider>
-          <AuthRedirectHandler />
           {children}
           <CartDrawer />
         </CartProvider>
