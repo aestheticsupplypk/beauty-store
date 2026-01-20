@@ -28,6 +28,8 @@ export default function ParlourSignupPage() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [provinceCode, setProvinceCode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Load provinces
   useEffect(() => {
@@ -270,29 +272,47 @@ export default function ParlourSignupPage() {
                   <label className="block text-sm font-medium mb-1">
                     Password <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="At least 6 characters"
-                    minLength={6}
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full border rounded px-3 py-2 pr-10"
+                      placeholder="At least 6 characters"
+                      minLength={6}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPassword ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Confirm Password <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Repeat password"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full border rounded px-3 py-2 pr-10"
+                      placeholder="Repeat password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showConfirmPassword ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
