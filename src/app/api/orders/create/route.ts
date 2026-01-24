@@ -53,10 +53,15 @@ export async function POST(req: Request) {
     const shippingAmount = Number((body?.shipping?.amount as any) || 0);
 
     // Affiliate / referral code handling (optional)
-    // Priority: 1) ref_code from request body, 2) aff_ref cookie (set by /r/[code] route)
+    // FIRST-TOUCH POLICY: Priority order for attribution:
+    // 1) ref_code from request body (set by CartContext from LP ?ref= param - already first-touch locked)
+    // 2) aff_ref cookie (set by /r/[code] route - also first-touch locked)
+    // The first valid source wins; we don't mix or override.
     const cookieStore = cookies();
-    const cookieRef = cookieStore.get('aff_ref')?.value || '';
-    const rawRef = String(body?.ref_code || cookieRef || '').trim().toUpperCase();
+    const bodyRef = String(body?.ref_code || '').trim().toUpperCase();
+    const cookieRef = cookieStore.get('aff_ref')?.value?.trim().toUpperCase() || '';
+    // Use body ref if present, otherwise fall back to cookie
+    const rawRef = bodyRef || cookieRef;
     let affiliateId: string | null = null;
     let affiliateRefCode: string | null = null;
 

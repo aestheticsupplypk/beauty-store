@@ -1,16 +1,28 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Default redirect destination (can be changed to a specific LP for better conversion)
-const DEFAULT_REDIRECT = '/';
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+// Default redirect destination - change this to a specific LP for better conversion
+// e.g., '/lp/afal-tag' when you have a hero product
+const DEFAULT_AFFILIATE_REDIRECT_PATH = '/';
+
 const COOKIE_NAME = 'aff_ref';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+
+// ============================================================================
+// HELPERS
+// ============================================================================
 
 // Validate affiliate code format: 4-12 alphanumeric characters
 function isValidCodeFormat(code: string): boolean {
   return /^[A-Z0-9]{4,12}$/i.test(code);
 }
 
+// ============================================================================
+// ROUTE HANDLER
+// ============================================================================
 export async function GET(
   request: NextRequest,
   { params }: { params: { code: string } }
@@ -18,8 +30,9 @@ export async function GET(
   const { code } = params;
   const url = new URL(request.url);
   
-  // Create redirect response
-  const redirectUrl = new URL(DEFAULT_REDIRECT, url.origin);
+  // SECURITY: Only allow internal redirects - no open redirect vulnerability
+  // We only redirect to DEFAULT_AFFILIATE_REDIRECT_PATH, never to user-supplied URLs
+  const redirectUrl = new URL(DEFAULT_AFFILIATE_REDIRECT_PATH, url.origin);
   const response = NextResponse.redirect(redirectUrl);
 
   // Validate code format
@@ -30,8 +43,15 @@ export async function GET(
 
   const normalizedCode = code.toUpperCase();
 
-  // Optional: Verify code exists in database
-  // This is optional - you can skip this check and let checkout validate
+  // FIRST-TOUCH POLICY: Don't overwrite existing attribution
+  // If user already has an aff_ref cookie, keep the original (first-touch wins)
+  const existingCookie = request.cookies.get(COOKIE_NAME)?.value;
+  if (existingCookie && isValidCodeFormat(existingCookie)) {
+    // User already has valid attribution - don't overwrite, just redirect
+    return response;
+  }
+
+  // Verify affiliate exists and is active before setting cookie
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
