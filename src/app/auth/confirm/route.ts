@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
   }
 
   // Create the redirect response FIRST
-  const redirectUrl = type === 'recovery' ? '/auth/reset-password' : next;
+  // For recovery, use the next param if provided, otherwise default to /auth/reset-password
+  const redirectUrl = type === 'recovery' ? (next || '/auth/reset-password') : next;
   const response = NextResponse.redirect(new URL(redirectUrl, url.origin));
 
   // Create Supabase client that writes cookies to the RESPONSE object

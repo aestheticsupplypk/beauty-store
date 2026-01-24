@@ -49,12 +49,20 @@ export default function ResetPasswordPage() {
           <div className="text-green-600 text-5xl mb-4">✓</div>
           <h1 className="text-xl font-semibold">Password Updated!</h1>
           <p className="text-gray-600">Your password has been successfully reset.</p>
-          <button
-            onClick={() => router.push('/admin/login')}
-            className="w-full bg-black text-white rounded py-2"
-          >
-            Go to Admin Login
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => router.push('/affiliate/dashboard')}
+              className="w-full bg-black text-white rounded py-2"
+            >
+              Go to Affiliate Login
+            </button>
+            <button
+              onClick={() => router.push('/admin/login')}
+              className="w-full border border-gray-300 text-gray-700 rounded py-2 hover:bg-gray-50"
+            >
+              Go to Admin Login
+            </button>
+          </div>
         </div>
       </div>
     );
