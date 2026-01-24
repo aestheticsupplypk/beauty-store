@@ -54,7 +54,7 @@ function CheckoutInner({ initialReferralCode }: CheckoutClientProps) {
   const router = useRouter();
   const search = useSearchParams();
   const itemsParam = search.get("items");
-  const { attribution, clearCart } = useCart();
+  const { attribution, clearCart, removeItem, updateQuantity } = useCart();
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,18 +122,41 @@ function CheckoutInner({ initialReferralCode }: CheckoutClientProps) {
 
   // Handlers for qty and remove
   const setQtyAt = (idx: number, qty: number) => {
+    const variantId = lines[idx]?.variant_id;
+    const newQty = Math.max(0, Math.floor(qty || 0));
     setLines((prev) => {
-      const next = prev.map((ln, i) => (i === idx ? { ...ln, qty: Math.max(0, Math.floor(qty || 0)) } : ln)).filter((ln) => ln.qty > 0);
+      const next = prev.map((ln, i) => (i === idx ? { ...ln, qty: newQty } : ln)).filter((ln) => ln.qty > 0);
       replaceUrlWithLines(next);
+      // Sync with CartContext
+      if (variantId) {
+        if (newQty <= 0) {
+          removeItem(variantId);
+        } else {
+          updateQuantity(variantId, newQty);
+        }
+      }
+      // If cart is now empty, clear the entire cart context
+      if (next.length === 0) {
+        clearCart();
+      }
       return next;
     });
   };
   const incQty = (idx: number) => setQtyAt(idx, (lines[idx]?.qty || 0) + 1);
   const decQty = (idx: number) => setQtyAt(idx, (lines[idx]?.qty || 0) - 1);
   const removeLine = (idx: number) => {
+    const variantId = lines[idx]?.variant_id;
     setLines((prev) => {
       const next = prev.filter((_, i) => i !== idx);
       replaceUrlWithLines(next);
+      // Sync with CartContext - remove item from global cart
+      if (variantId) {
+        removeItem(variantId);
+      }
+      // If cart is now empty, clear the entire cart context
+      if (next.length === 0) {
+        clearCart();
+      }
       return next;
     });
   };
@@ -294,24 +317,44 @@ function CheckoutInner({ initialReferralCode }: CheckoutClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemsParam]);
 
+  // Auto-validate referral code from cookie on page load
+  const autoValidatedRef = useRef(false);
+  useEffect(() => {
+    // Only auto-validate once when we have initialReferralCode from cookie
+    if (!initialReferralCode || autoValidatedRef.current) return;
+    if (refCode !== initialReferralCode) return;
+    if (refStatus !== 'idle') return;
+    
+    // Auto-validate the code from cookie
+    (async () => {
+      try {
+        autoValidatedRef.current = true;
+        setRefStatus('checking');
+        const res = await fetch(`/api/affiliate/validate?code=${encodeURIComponent(initialReferralCode)}`);
+        const data = await res.json();
+        const valid = !!data?.valid;
+        setRefStatus(valid ? 'valid' : 'invalid');
+        recomputeReferralDiscount(valid);
+      } catch {
+        setRefStatus('invalid');
+        setRefDiscountAmount(0);
+      }
+    })();
+  }, [initialReferralCode, refCode, refStatus]);
+
   // Prefill referral / beautician code from:
   // 1. Server-provided initialReferralCode (from aff_ref cookie - highest priority, already set in useState)
   // 2. Cart attribution (first-touch locked)
   // 3. URL param
   useEffect(() => {
     try {
-      // If we already have a code from server cookie, mark it as valid and show helper text
+      // If we have code from server cookie, it will be auto-validated above
       if (initialReferralCode && refCode === initialReferralCode) {
-        if (refStatus === 'idle') {
-          setRefStatus('valid');
-        }
         return;
       }
       // Priority: locked attribution from cart context > URL param
       if (attribution.refCode && attribution.refCodeLocked && !refCode) {
         setRefCode(String(attribution.refCode).trim().toUpperCase());
-        // Auto-validate the locked code
-        setRefStatus('valid');
       } else {
         const raw = search.get('ref');
         if (raw && !refCode) {
@@ -319,7 +362,7 @@ function CheckoutInner({ initialReferralCode }: CheckoutClientProps) {
         }
       }
     } catch {}
-  }, [search, refCode, attribution.refCode, attribution.refCodeLocked, initialReferralCode, refStatus]);
+  }, [search, refCode, attribution.refCode, attribution.refCodeLocked, initialReferralCode]);
 
   // When province changes and city-rates are enabled, fetch cities
   useEffect(() => {
@@ -915,11 +958,17 @@ function CheckoutInner({ initialReferralCode }: CheckoutClientProps) {
                   {refStatus === 'checking' ? 'Checking…' : 'Apply'}
                 </button>
               </div>
+              {refStatus === 'checking' && (
+                <p className="mt-1 text-xs text-gray-500">Validating code...</p>
+              )}
               {refStatus === 'valid' && initialReferralCode && refCode === initialReferralCode && (
                 <p className="mt-1 text-xs text-emerald-600">✓ Referral code applied from your link.</p>
               )}
               {refStatus === 'valid' && refDiscountAmount > 0 && !(initialReferralCode && refCode === initialReferralCode) && (
-                <p className="mt-1 text-xs text-emerald-700">Referral discount applied.</p>
+                <p className="mt-1 text-xs text-emerald-700">✓ Referral discount applied.</p>
+              )}
+              {refStatus === 'idle' && refCode.trim() && (
+                <p className="mt-1 text-xs text-amber-600 font-semibold">👆 Click "Apply" to get your referral discount</p>
               )}
               {refStatus === 'invalid' && (
                 <p className="mt-1 text-xs text-red-600">Code not found or inactive.</p>
