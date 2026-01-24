@@ -343,7 +343,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-3 sm:p-5 md:p-6 grid grid-cols-1 lg:grid-cols-[680px_1fr] gap-3 sm:gap-6 lg:gap-8 items-start">
+    <div className="max-w-7xl mx-auto p-3 sm:p-5 md:p-6 grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-3 sm:gap-6 lg:gap-8 items-start">
       <UTMCapture />
       <AttributionCapture productSlug={product.slug} />
       {/* Meta Pixel: ViewContent */}

@@ -31,7 +31,7 @@ type OrderDrawerProps = {
 
 export default function OrderDrawer({ open, onClose, colors, models, packages, sizes, matrix, initialColor, colorThumbs, logoUrl, specialMessage, contentIdSource, variantSkuMap, promotions, productId, productName, productSlug }: OrderDrawerProps) {
   const router = useRouter();
-  const { addItem, openCart, itemCount } = useCart();
+  const { addItem, openCart, closeCart, itemCount } = useCart();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -171,6 +171,8 @@ export default function OrderDrawer({ open, onClose, colors, models, packages, s
         openCart();
       } else {
         // Fast path: single item, no upsells → go directly to checkout (old experience)
+        // Close cart drawer first (addItem auto-opens it)
+        closeCart();
         const checkoutItems = selectedItems.map(it => ({
           variant_id: it.variant_id,
           qty: it.qty,
@@ -268,14 +270,8 @@ export default function OrderDrawer({ open, onClose, colors, models, packages, s
       {/* Backdrop - softer dim */}
       <div className="absolute inset-0 bg-black/40" onClick={() => !loading && onClose()} />
 
-      {/* Drawer - Mobile: bottom sheet, Desktop: right side */}
-      <div className="
-        absolute bg-white shadow-xl overflow-y-auto
-        /* Mobile: bottom sheet with rounded top */
-        inset-x-0 bottom-0 max-h-[90vh] rounded-t-2xl p-5
-        /* Desktop: right side drawer */
-        sm:inset-y-0 sm:right-0 sm:left-auto sm:bottom-auto sm:w-full sm:max-w-xl sm:max-h-none sm:rounded-l-xl sm:rounded-t-none sm:p-6
-      ">
+      {/* Drawer - Mobile: bottom sheet, Desktop: full-height right side panel */}
+      <div className="absolute bg-white shadow-xl overflow-y-auto inset-x-0 bottom-0 max-h-[90vh] rounded-t-2xl p-5 sm:inset-y-0 sm:top-0 sm:right-0 sm:left-auto sm:bottom-0 sm:w-[520px] sm:max-h-full sm:h-full sm:rounded-none sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             {logoUrl && (

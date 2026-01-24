@@ -231,12 +231,12 @@ export default function BuyPanel({ colors, models, packages, sizes, matrix, colo
                 onClick={() => setSelectedColor(c)}
                 disabled={disabled}
                 className={`rounded-full border text-sm flex items-center justify-center ${active ? 'ring-2 ring-black' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
-                style={{ width: 40, height: 40, padding: 2, overflow: 'hidden', background: 'white' }}
+                style={{ width: 56, height: 56, padding: 2, overflow: 'hidden', background: 'white' }}
                 title={disabled ? 'Out of stock' : `${a} available`}
               >
                 {thumb ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumb} alt={c} width={36} height={36} style={{ objectFit: 'cover', width: 36, height: 36 }} />
+                  <img src={thumb} alt={c} width={52} height={52} style={{ objectFit: 'cover', width: 52, height: 52 }} />
                 ) : (
                   <span className={`px-3 py-2 ${active ? 'bg-black text-white' : 'bg-white'}`}>{c}</span>
                 )}
@@ -413,13 +413,15 @@ export default function BuyPanel({ colors, models, packages, sizes, matrix, colo
         )}
       </div>
 
-      {/* Trust row */}
-      <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-600">
-        <span className="inline-flex items-center gap-1"><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 12H4"/><path d="M14 6l6 6-6 6"/></svg> Cash on Delivery</span>
-        <span className="inline-flex items-center gap-1"><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21V7a2 2 0 0 0-2-2h-3l-2-2H8L6 5H5a2 2 0 0 0-2 2v14z"/></svg> 24–48h Dispatch</span>
-        <button type="button" onClick={()=>{ setShowReturns(true); try { track('ClickReturnsInfo'); } catch {} }} className="inline-flex items-center gap-1 hover:underline">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg>
-          Easy Returns
+      {/* Trust row - stacked layout like afal-store */}
+      <div className="flex flex-col gap-2 text-base text-gray-700">
+        <div className="flex items-center gap-5">
+          <span className="inline-flex items-center gap-2 font-medium"><svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 12H4"/><path d="M14 6l6 6-6 6"/></svg> Cash on Delivery</span>
+          <span className="inline-flex items-center gap-2 font-medium"><svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21V7a2 2 0 0 0-2-2h-3l-2-2H8L6 5H5a2 2 0 0 0-2 2v14z"/></svg> 24–48h Dispatch</span>
+        </div>
+        <button type="button" onClick={()=>{ setShowReturns(true); try { track('ClickReturnsInfo'); } catch {} }} className="inline-flex items-center gap-2 font-medium hover:underline w-fit">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg>
+          Easy Returns – click to read return policy
         </button>
         {darazTrustLine && darazUrl && (
           <a

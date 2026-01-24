@@ -318,12 +318,17 @@ function CheckoutInner({ initialReferralCode }: CheckoutClientProps) {
   }, [itemsParam]);
 
   // Auto-validate referral code from cookie on page load
+  // Wait for productAff to be loaded before auto-validating so discount can be computed
   const autoValidatedRef = useRef(false);
+  const productAffLoaded = Object.keys(productAff).length > 0;
   useEffect(() => {
     // Only auto-validate once when we have initialReferralCode from cookie
     if (!initialReferralCode || autoValidatedRef.current) return;
     if (refCode !== initialReferralCode) return;
     if (refStatus !== 'idle') return;
+    // Wait for product affiliate settings to load before validating
+    if (!productAffLoaded && !loading) return;
+    if (loading) return; // Wait for initial data load
     
     // Auto-validate the code from cookie
     (async () => {
@@ -340,7 +345,7 @@ function CheckoutInner({ initialReferralCode }: CheckoutClientProps) {
         setRefDiscountAmount(0);
       }
     })();
-  }, [initialReferralCode, refCode, refStatus]);
+  }, [initialReferralCode, refCode, refStatus, productAffLoaded, loading]);
 
   // Prefill referral / beautician code from:
   // 1. Server-provided initialReferralCode (from aff_ref cookie - highest priority, already set in useState)
