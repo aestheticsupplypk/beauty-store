@@ -127,7 +127,8 @@ export async function GET(request: NextRequest) {
       
       // Track last order date
       const orderDate = ao.created_at;
-      if (!statsById[aid].last_order_date || orderDate > statsById[aid].last_order_date) {
+      const currentLastOrder = statsById[aid].last_order_date;
+      if (!currentLastOrder || orderDate > currentLastOrder) {
         statsById[aid].last_order_date = orderDate;
       }
       
