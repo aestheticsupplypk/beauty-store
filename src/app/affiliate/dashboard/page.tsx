@@ -62,11 +62,11 @@ export default function AffiliateDashboardPage() {
   const [signingOut, setSigningOut] = useState(false);
 
   const getWhatsAppMessage = (code: string) => {
-    return `Hi! I'm sharing my personal referral code for Aesthetic Supply PK — Pakistan's trusted beauty supplier for salons and professionals.\n\nUse code: ${code}\n\nYou'll get 10% OFF your first order.\n\nShop here: https://aestheticsupplypk.com\n\nLet me know if you need help choosing products!`;
+    return `Hi! I'm sharing my personal referral code for Aesthetic PK — Pakistan's trusted beauty supplier for salons and professionals.\n\nUse code: ${code}\n\nYou'll get 10% OFF your first order.\n\nShop here: https://aestheticpk.com\n\nLet me know if you need help choosing products!`;
   };
 
   const getInstagramBio = (code: string) => {
-    return `Shop professional beauty products\nUse code ${code} for 10% off\naestheticsupplypk.com`;
+    return `Shop professional beauty products\nUse code ${code} for 10% off\naestheticpk.com`;
   };
 
   const loadForCurrentUser = async (opts?: { fromLogin?: boolean }) => {
@@ -452,13 +452,13 @@ export default function AffiliateDashboardPage() {
                 <div className="text-xs font-medium text-gray-600 mb-1">Your referral link</div>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 text-xs bg-white border border-emerald-200 rounded px-2 py-1.5 text-gray-700 truncate">
-                    https://aestheticsupplypk.com/r/{data.affiliate.code}
+                    https://aestheticpk.com/r/{data.affiliate.code}
                   </code>
                   <button
                     type="button"
                     onClick={async () => {
                       try {
-                        await navigator.clipboard.writeText(`https://aestheticsupplypk.com/r/${data.affiliate.code}`);
+                        await navigator.clipboard.writeText(`https://aestheticpk.com/r/${data.affiliate.code}`);
                         setCopiedLink(true);
                         setTimeout(() => setCopiedLink(false), 2000);
                       } catch {}
