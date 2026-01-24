@@ -38,7 +38,7 @@ function getClientIP(request: NextRequest): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email } = body;
+    const { email, source } = body; // source can be 'affiliate', 'parlour', or undefined
 
     // Validate email format
     if (!email || !isValidEmail(email)) {
@@ -128,11 +128,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: SUCCESS_MESSAGE });
     }
 
+    // Determine redirect based on source
+    const sourceParam = source === 'parlour' ? 'parlour' : 'affiliate';
+    
     // Send password reset email via Supabase Auth
     const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(
       email.toLowerCase().trim(),
       {
-        redirectTo: `${SITE_URL}/auth/confirm?next=/affiliate/reset-password`,
+        redirectTo: `${SITE_URL}/auth/confirm?next=/auth/reset-password?source=${sourceParam}`,
       }
     );
 

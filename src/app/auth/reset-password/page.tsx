@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { updatePassword } from './actions';
 
 export default function ResetPasswordPage() {
@@ -12,6 +12,8 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const source = searchParams.get('source'); // 'affiliate', 'parlour', or null (admin)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,26 +45,46 @@ export default function ResetPasswordPage() {
   };
 
   if (success) {
+    // Determine which login button(s) to show based on source
+    const getLoginButton = () => {
+      if (source === 'affiliate') {
+        return (
+          <button
+            onClick={() => router.push('/affiliate/dashboard')}
+            className="w-full bg-black text-white rounded py-2"
+          >
+            Go to Affiliate Login
+          </button>
+        );
+      }
+      if (source === 'parlour') {
+        return (
+          <button
+            onClick={() => router.push('/p/login')}
+            className="w-full bg-black text-white rounded py-2"
+          >
+            Go to Parlour Login
+          </button>
+        );
+      }
+      // Default: admin (no source param means admin reset via Supabase dashboard)
+      return (
+        <button
+          onClick={() => router.push('/admin/login')}
+          className="w-full bg-black text-white rounded py-2"
+        >
+          Go to Admin Login
+        </button>
+      );
+    };
+
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-4 border rounded-lg p-6 shadow-sm text-center">
           <div className="text-green-600 text-5xl mb-4">✓</div>
           <h1 className="text-xl font-semibold">Password Updated!</h1>
           <p className="text-gray-600">Your password has been successfully reset.</p>
-          <div className="space-y-2">
-            <button
-              onClick={() => router.push('/affiliate/dashboard')}
-              className="w-full bg-black text-white rounded py-2"
-            >
-              Go to Affiliate Login
-            </button>
-            <button
-              onClick={() => router.push('/admin/login')}
-              className="w-full border border-gray-300 text-gray-700 rounded py-2 hover:bg-gray-50"
-            >
-              Go to Admin Login
-            </button>
-          </div>
+          {getLoginButton()}
         </div>
       </div>
     );
