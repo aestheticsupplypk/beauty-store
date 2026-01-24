@@ -161,6 +161,25 @@ export default function AffiliateSettingsPage() {
         </div>
       </div>
 
+      {/* Payout Readiness Status */}
+      {payoutMethod ? (
+        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+          <span className="text-emerald-600 text-lg">✓</span>
+          <div>
+            <span className="text-sm font-medium text-emerald-800">Payout setup: Complete</span>
+            <p className="text-xs text-emerald-600">You're all set to receive commission payouts.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <span className="text-amber-600 text-lg">⚠️</span>
+          <div>
+            <span className="text-sm font-medium text-amber-800">Payout setup: Incomplete</span>
+            <p className="text-xs text-amber-600">We can't pay commissions until you select a payout method below.</p>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
           {error}

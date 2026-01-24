@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       { userAgent: '*', allow: '/' },
       // Block non-SEO paths
-      { userAgent: '*', disallow: ['/admin', '/checkout', '/api', '/p', '/p/'] },
+      { userAgent: '*', disallow: ['/admin', '/checkout', '/api', '/p', '/p/', '/r', '/r/'] },
     ],
     sitemap: `${site}/sitemap.xml`,
     host: site,

@@ -49,6 +49,8 @@ export default function AffiliateDashboardPage() {
   const [copied, setCopied] = useState(false);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
   const [copiedInsta, setCopiedInsta] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [showKpiHelp, setShowKpiHelp] = useState(false);
   const [statusExpanded, setStatusExpanded] = useState(false);
   const [showAllOrders, setShowAllOrders] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -424,10 +426,10 @@ export default function AffiliateDashboardPage() {
               </div>
             </div>
 
-            <div className="rounded-md border border-dashed border-emerald-300 bg-white px-3 py-3 space-y-2">
-              <div className="text-xs font-medium text-gray-600">Your referral code</div>
+            <div className="rounded-md border-2 border-emerald-400 bg-emerald-50 px-4 py-4 space-y-3">
+              <div className="text-xs font-medium text-gray-700">Your referral code</div>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="font-mono text-lg font-semibold tracking-[0.35em] text-gray-900">
+                <div className="font-mono text-2xl font-bold tracking-[0.35em] text-gray-900">
                   {data.affiliate.code}
                 </div>
                 <button
@@ -439,10 +441,33 @@ export default function AffiliateDashboardPage() {
                       setTimeout(() => setCopied(false), 2000);
                     } catch {}
                   }}
-                  className="inline-flex items-center justify-center rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50"
+                  className="inline-flex items-center justify-center rounded bg-emerald-600 text-white px-4 py-2 text-xs font-medium hover:bg-emerald-700"
                 >
-                  {copied ? "Copied" : "Copy code"}
+                  {copied ? "✓ Copied" : "Copy code"}
                 </button>
+              </div>
+              
+              {/* Shareable Link */}
+              <div className="pt-2 border-t border-emerald-200">
+                <div className="text-xs font-medium text-gray-600 mb-1">Your referral link</div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-white border border-emerald-200 rounded px-2 py-1.5 text-gray-700 truncate">
+                    https://aestheticsupplypk.com/r/{data.affiliate.code}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(`https://aestheticsupplypk.com/r/${data.affiliate.code}`);
+                        setCopiedLink(true);
+                        setTimeout(() => setCopiedLink(false), 2000);
+                      } catch {}
+                    }}
+                    className="inline-flex items-center justify-center rounded border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                  >
+                    {copiedLink ? "✓ Copied" : "Copy link"}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -588,8 +613,29 @@ export default function AffiliateDashboardPage() {
             </div>
           </div>
 
+          {/* Commission explanation line */}
+          <div className="text-xs text-gray-600 -mt-1 bg-gray-50 rounded px-3 py-2 border border-gray-100">
+            💡 Commission becomes <strong>Pending</strong> after delivery, and <strong>Payable</strong> after the 10-day return window.
+          </div>
+
+          {/* What do these mean? collapsible */}
+          <button
+            type="button"
+            onClick={() => setShowKpiHelp(!showKpiHelp)}
+            className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 -mt-1"
+          >
+            {showKpiHelp ? '▼' : '▶'} What do these mean?
+          </button>
+          {showKpiHelp && (
+            <div className="text-xs text-gray-600 bg-gray-50 rounded p-3 border space-y-1 -mt-1">
+              <p><strong>Earned:</strong> Total commission from all delivered orders.</p>
+              <p><strong>Pending:</strong> Commission from recent deliveries (10-day hold for returns).</p>
+              <p><strong>Payable:</strong> Ready for payout — included in next month's payment.</p>
+            </div>
+          )}
+
           {/* 3️⃣ Next Payout Line (simple, not a card) */}
-          <div className="text-xs text-gray-500 -mt-2">
+          <div className="text-xs text-gray-500">
             Next payout: ~10th of next month • Estimated: {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
           </div>
 
@@ -612,7 +658,7 @@ export default function AffiliateDashboardPage() {
                   )}
                 </span>
               </div>
-              <span className="text-xs text-emerald-600">View details →</span>
+              <span className="text-xs text-emerald-600">Tier details →</span>
             </button>
           )}
           {data.affiliate.status === 'warning' && (

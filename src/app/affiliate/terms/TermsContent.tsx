@@ -84,6 +84,33 @@ export default function TermsContent({ products, tiers, lastUpdated }: TermsCont
           </div>
         </div>
 
+        {/* Quick Summary Box */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6">
+          <h3 className="font-semibold text-emerald-800 mb-2">
+            {lang === 'en' ? '📋 Quick Summary' : '📋 مختصر خلاصہ'}
+          </h3>
+          <ul className="space-y-2 text-sm text-gray-700">
+            <li className="flex items-start gap-2">
+              <span className="text-emerald-600">✓</span>
+              <span>{lang === 'en' 
+                ? 'Commission becomes Payable 10 days after successful delivery' 
+                : 'کامیاب ڈیلیوری کے 10 دن بعد کمیشن قابل ادائیگی ہو جاتا ہے'}</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-emerald-600">✓</span>
+              <span>{lang === 'en' 
+                ? 'Payouts are processed monthly, around the 10th of each month' 
+                : 'پے آؤٹس ماہانہ ہوتے ہیں، عموماً ہر ماہ کی 10 تاریخ کو'}</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-red-600">⚠</span>
+              <span>{lang === 'en' 
+                ? 'Suspension: 5+ failed deliveries (customer-caused) in 30 days = code disabled' 
+                : 'معطلی: 30 دن میں 5+ ناکام ڈیلیوریز (گاہک کی وجہ سے) = کوڈ بند'}</span>
+            </li>
+          </ul>
+        </div>
+
         {/* Content - English */}
         {lang === 'en' && (
           <div className="space-y-8 text-gray-800">

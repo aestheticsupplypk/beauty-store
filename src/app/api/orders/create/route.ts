@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseServiceClient } from '@/lib/supabaseService';
 import crypto from 'crypto';
+import { cookies } from 'next/headers';
 
 /*
 Expected payload (JSON):
@@ -52,7 +53,10 @@ export async function POST(req: Request) {
     const shippingAmount = Number((body?.shipping?.amount as any) || 0);
 
     // Affiliate / referral code handling (optional)
-    const rawRef = String(body?.ref_code || '').trim().toUpperCase();
+    // Priority: 1) ref_code from request body, 2) aff_ref cookie (set by /r/[code] route)
+    const cookieStore = cookies();
+    const cookieRef = cookieStore.get('aff_ref')?.value || '';
+    const rawRef = String(body?.ref_code || cookieRef || '').trim().toUpperCase();
     let affiliateId: string | null = null;
     let affiliateRefCode: string | null = null;
 
