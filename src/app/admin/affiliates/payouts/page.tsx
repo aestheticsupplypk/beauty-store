@@ -23,15 +23,29 @@ type Batch = {
 
 type LastBatch = Batch | null;
 
+type PayableAffiliate = {
+  affiliate_id: string;
+  name: string;
+  code: string;
+  email: string | null;
+  payout_method: string;
+  payout_account: string | null;
+  commission_count: number;
+  total_amount: number;
+};
+
 export default function AdminPayoutsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [lastBatch, setLastBatch] = useState<LastBatch>(null);
   const [recentBatches, setRecentBatches] = useState<Batch[]>([]);
+  const [payableAffiliates, setPayableAffiliates] = useState<PayableAffiliate[]>([]);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
 
   useEffect(() => {
     loadData();
+    loadCandidates();
   }, []);
 
   async function loadData() {
@@ -53,6 +67,21 @@ export default function AdminPayoutsPage() {
       setError(e?.message || 'Failed to load data');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadCandidates() {
+    try {
+      setLoadingCandidates(true);
+      const res = await fetch('/api/admin/affiliate/payouts/candidates');
+      const json = await res.json();
+      if (res.ok && json.candidates) {
+        setPayableAffiliates(json.candidates);
+      }
+    } catch (e) {
+      console.error('Failed to load candidates', e);
+    } finally {
+      setLoadingCandidates(false);
     }
   }
 
@@ -174,6 +203,68 @@ export default function AdminPayoutsPage() {
             </Link>
           </div>
         </div>
+      )}
+
+      {/* Affiliate Breakdown - Payable Amounts */}
+      {payableAffiliates.length > 0 && (
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+            <h2 className="font-medium">Affiliates with Payable Commissions</h2>
+            <span className="text-sm text-gray-500">{payableAffiliates.length} affiliate{payableAffiliates.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Affiliate</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Method</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Account</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Orders</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Payable</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payableAffiliates.map((aff) => {
+                  const isReady = aff.payout_method !== 'not_set' && !!aff.payout_account;
+                  return (
+                    <tr key={aff.affiliate_id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{aff.name}</div>
+                        {aff.email && <div className="text-xs text-gray-500">{aff.email}</div>}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{aff.code}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {aff.payout_method === 'easypaisa' && <span className="text-green-600">Easypaisa</span>}
+                        {aff.payout_method === 'bank_transfer' && <span className="text-blue-600">Bank</span>}
+                        {aff.payout_method === 'not_set' && <span className="text-gray-400">Not set</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-600">
+                        {aff.payout_account || <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right">{aff.commission_count}</td>
+                      <td className="px-4 py-3 text-right font-medium text-emerald-600">
+                        {aff.total_amount.toLocaleString()} PKR
+                      </td>
+                      <td className="px-4 py-3">
+                        {isReady ? (
+                          <span className="px-2 py-0.5 text-xs rounded bg-emerald-100 text-emerald-700">Ready</span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700">Not Ready</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {loadingCandidates && (
+        <div className="text-center py-4 text-gray-500 text-sm">Loading payable affiliates...</div>
       )}
 
       {/* Recent Batches */}

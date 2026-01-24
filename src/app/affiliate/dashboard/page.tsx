@@ -14,6 +14,8 @@ type AffiliateSummary = {
     status: 'active' | 'warning' | 'suspended' | 'revoked';
     strike_count: number;
     commission_rate: number;
+    payout_method?: string | null;
+    phone?: string | null;
   };
   stats: {
     total_orders: number;
@@ -60,6 +62,7 @@ export default function AffiliateDashboardPage() {
   const [forgotSuccess, setForgotSuccess] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [kpiPeriod, setKpiPeriod] = useState<'all' | 'month' | 'last_month'>('all');
 
   const getWhatsAppMessage = (code: string) => {
     return `Hi! I'm sharing my personal referral code for Aesthetic PK — Pakistan's trusted beauty supplier for salons and professionals.\n\nUse code: ${code}\n\nYou'll get 10% OFF your first order.\n\nShop here: https://aestheticpk.com\n\nLet me know if you need help choosing products!`;
@@ -391,6 +394,37 @@ export default function AffiliateDashboardPage() {
 
       {data && (
         <div className="space-y-5">
+          {/* Payout Info Incomplete Warning */}
+          {(!data.affiliate.payout_method || !data.affiliate.phone) && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-600">⚠️</span>
+                <span className="text-sm font-medium text-amber-800">Payout info incomplete</span>
+                <span className="text-sm text-amber-700">— Add your payout method to receive earnings</span>
+              </div>
+              <Link
+                href="/affiliate/settings"
+                className="text-sm font-medium text-amber-700 hover:text-amber-900 underline"
+              >
+                Fix now →
+              </Link>
+            </div>
+          )}
+
+          {/* Notifications Area */}
+          <div className="rounded-md border border-blue-200 bg-blue-50/50 px-4 py-3">
+            <div className="flex items-start gap-2">
+              <span className="text-blue-500">🔔</span>
+              <div className="text-sm text-blue-800">
+                {data.stats.total_orders === 0 ? (
+                  <span>Your first order will appear here once a client uses your code.</span>
+                ) : (
+                  <span>Next payout runs on the 10th of each month. Payable amount: <strong>{Number(data.stats.payable_commission || 0).toLocaleString()} PKR</strong></span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* 1️⃣ Identity + Referral Actions */}
           <div className="border rounded p-4 bg-gray-50 space-y-3">
             <div className="flex items-start justify-between">
@@ -427,10 +461,13 @@ export default function AffiliateDashboardPage() {
             </div>
 
             <div className="rounded-md border-2 border-emerald-400 bg-emerald-50 px-4 py-4 space-y-3">
-              <div className="text-xs font-medium text-gray-700">Your referral code</div>
+              <div className="text-sm font-medium text-gray-700">Your referral code</div>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="font-mono text-2xl font-bold tracking-[0.35em] text-gray-900">
-                  {data.affiliate.code}
+                <div>
+                  <div className="font-mono text-2xl font-bold tracking-[0.35em] text-gray-900">
+                    {data.affiliate.code.split('').join(' ')}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">Copy button copies code without spaces</div>
                 </div>
                 <button
                   type="button"
@@ -449,9 +486,20 @@ export default function AffiliateDashboardPage() {
               
               {/* Shareable Link */}
               <div className="pt-2 border-t border-emerald-200">
-                <div className="text-xs font-medium text-gray-600 mb-1">Your referral link</div>
+                <div className="flex items-center gap-1.5 text-sm font-medium text-gray-600 mb-1">
+                  Your referral link
+                  <span className="group relative">
+                    <svg className="w-4 h-4 text-gray-400 cursor-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 16v-4M12 8h.01"/>
+                    </svg>
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      Opens homepage with your referral cookie set
+                    </span>
+                  </span>
+                </div>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-white border border-emerald-200 rounded px-2 py-1.5 text-gray-700 truncate">
+                  <code className="flex-1 text-sm bg-white border border-emerald-200 rounded px-2 py-1.5 text-gray-700 truncate">
                     https://aestheticpk.com/r/{data.affiliate.code}
                   </code>
                   <button
@@ -475,8 +523,8 @@ export default function AffiliateDashboardPage() {
             {data.stats.total_orders === 0 ? (
               <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-4 py-4 space-y-3">
                 <div>
-                  <div className="font-medium text-emerald-800 text-sm">📣 Next step: Share your code</div>
-                  <p className="text-xs text-gray-700 mt-1">
+                  <div className="font-medium text-emerald-800 text-base">📣 Next step: Share your code</div>
+                  <p className="text-sm text-gray-700 mt-1">
                     Send your referral code to clients on WhatsApp or Instagram. When they order using your code, your commission will appear here automatically.
                   </p>
                 </div>
@@ -549,13 +597,13 @@ export default function AffiliateDashboardPage() {
               <div className="flex items-start gap-3">
                 <div className="text-2xl">💬</div>
                 <div className="flex-1">
-                  <div className="font-medium text-green-800 text-sm">Join our Affiliate WhatsApp Group</div>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <div className="font-medium text-green-800 text-base">Join our Affiliate WhatsApp Group</div>
+                  <p className="text-sm text-gray-600 mt-1">
                     Get updates, tips, and connect with other affiliates. Scan the QR code or click the link below.
                   </p>
                   <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <a
-                      href="https://chat.whatsapp.com/HiXVOBn7RmY1ptVrQN4R7r"
+                      href="https://chat.whatsapp.com/Dmf1r0FxJFJJezP7pIDz45"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
@@ -570,7 +618,7 @@ export default function AffiliateDashboardPage() {
                 </div>
                 <div className="hidden sm:block">
                   <img 
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://chat.whatsapp.com/HiXVOBn7RmY1ptVrQN4R7r" 
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://chat.whatsapp.com/Dmf1r0FxJFJJezP7pIDz45" 
                     alt="WhatsApp Group QR Code"
                     className="w-20 h-20 rounded border border-gray-200"
                   />
@@ -580,41 +628,64 @@ export default function AffiliateDashboardPage() {
           </div>
 
           {/* 2️⃣ Earnings Stats Row */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-medium text-gray-700">Your Earnings</div>
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setKpiPeriod('month')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${kpiPeriod === 'month' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                This month
+              </button>
+              <button
+                onClick={() => setKpiPeriod('last_month')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${kpiPeriod === 'last_month' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Last month
+              </button>
+              <button
+                onClick={() => setKpiPeriod('all')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${kpiPeriod === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                All time
+              </button>
+            </div>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div className="border rounded p-3 bg-white">
-              <div className="text-[10px] uppercase text-gray-500">Total orders</div>
+              <div className="text-xs uppercase text-gray-500">Total orders</div>
               <div className="text-xl font-semibold mt-1">{data.stats.total_orders}</div>
             </div>
             <div className="border rounded p-3 bg-white">
-              <div className="text-[10px] uppercase text-gray-500">Total sales</div>
+              <div className="text-xs uppercase text-gray-500">Total sales</div>
               <div className="text-xl font-semibold mt-1">
                 {Number(data.stats.total_sales || 0).toLocaleString()} PKR
               </div>
             </div>
             <div className="border rounded p-3 bg-white">
-              <div className="text-[10px] uppercase text-gray-500">Earned</div>
+              <div className="text-xs uppercase text-gray-500">Earned</div>
               <div className="text-xl font-semibold mt-1 text-emerald-700">
                 {Number(data.stats.total_commission || 0).toLocaleString()} PKR
               </div>
             </div>
             <div className="border rounded p-3 bg-white">
-              <div className="text-[10px] uppercase text-gray-500">Pending</div>
+              <div className="text-xs uppercase text-gray-500">Pending</div>
               <div className="text-xl font-semibold mt-1 text-amber-600">
                 {Number(data.stats.pending_commission || 0).toLocaleString()} PKR
               </div>
-              <div className="text-[9px] text-gray-400 mt-0.5">10-day hold</div>
+              <div className="text-xs text-gray-400 mt-0.5">10-day hold</div>
             </div>
             <div className="border rounded p-3 bg-white border-emerald-200 bg-emerald-50/30">
-              <div className="text-[10px] uppercase text-emerald-700">Payable</div>
+              <div className="text-xs uppercase text-emerald-700">Payable</div>
               <div className="text-xl font-semibold mt-1 text-emerald-700">
                 {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
               </div>
-              <div className="text-[9px] text-emerald-600 mt-0.5">Included in next payout</div>
+              <div className="text-xs text-emerald-600 mt-0.5">Included in next payout</div>
             </div>
           </div>
 
           {/* Commission explanation line */}
-          <div className="text-xs text-gray-600 -mt-1 bg-gray-50 rounded px-3 py-2 border border-gray-100">
+          <div className="text-sm text-gray-600 -mt-1 bg-gray-50 rounded px-3 py-2 border border-gray-100">
             💡 Commission becomes <strong>Pending</strong> after delivery, and <strong>Payable</strong> after the 10-day return window.
           </div>
 
@@ -635,7 +706,7 @@ export default function AffiliateDashboardPage() {
           )}
 
           {/* 3️⃣ Next Payout Line (simple, not a card) */}
-          <div className="text-xs text-gray-500">
+          <div className="text-sm text-gray-500">
             Next payout: ~10th of next month • Estimated: {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
           </div>
 
@@ -729,7 +800,7 @@ export default function AffiliateDashboardPage() {
           {/* 5️⃣ Recent Orders (Last 3 only) */}
           <div className="border rounded p-4 bg-white">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-medium">Recent orders</h2>
+              <h2 className="font-medium text-base">Recent orders</h2>
               {data.orders.length > 0 && (
                 <Link
                   href="/affiliate/orders"
@@ -742,8 +813,8 @@ export default function AffiliateDashboardPage() {
             {data.orders.length === 0 ? (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-800 font-medium">You don't have any orders yet.</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-base text-gray-800 font-medium">You don't have any orders yet.</p>
+                  <p className="text-base text-gray-600">
                     Share your referral code with clients on WhatsApp or Instagram to start earning.
                   </p>
                 </div>
@@ -786,7 +857,7 @@ export default function AffiliateDashboardPage() {
           </div>
 
           {/* 6️⃣ Footer Links */}
-          <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-2">
+          <div className="flex flex-wrap gap-4 text-sm text-gray-500 pt-2">
             <Link href="/affiliate/orders" className="hover:text-emerald-600">
               View All Orders
             </Link>
@@ -795,9 +866,9 @@ export default function AffiliateDashboardPage() {
               Account Settings
             </Link>
             <span>•</span>
-            <Link href="/affiliate/terms" className="hover:text-emerald-600">
+            <a href="/affiliate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
               Terms & Conditions
-            </Link>
+            </a>
             <span>•</span>
             <a href="https://wa.me/923001234567" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
               Contact Support

@@ -40,7 +40,7 @@ export default function AffiliateOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<'this_month' | 'last_month' | 'last_2_months'>('this_month');
+  const [range, setRange] = useState<'this_month' | 'last_month' | 'last_2_months' | 'all_time'>('this_month');
   const [data, setData] = useState<OrdersResponse | null>(null);
   const [page, setPage] = useState(1);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -149,8 +149,16 @@ export default function AffiliateOrdersPage() {
       case 'this_month': return 'This Month';
       case 'last_month': return 'Last Month';
       case 'last_2_months': return 'Last 2 Months';
+      case 'all_time': return 'All Time';
       default: return r;
     }
+  }
+
+  function formatAmount(amount: number) {
+    if (amount >= 1000) {
+      return `${(amount / 1000).toFixed(1)}k`;
+    }
+    return `${amount.toLocaleString()} PKR`;
   }
 
   return (
@@ -168,7 +176,7 @@ export default function AffiliateOrdersPage() {
 
       {/* Range Tabs */}
       <div className="flex gap-2">
-        {(['this_month', 'last_month', 'last_2_months'] as const).map((r) => (
+        {(['this_month', 'last_month', 'last_2_months', 'all_time'] as const).map((r) => (
           <button
             key={r}
             onClick={() => setRange(r)}
@@ -181,6 +189,17 @@ export default function AffiliateOrdersPage() {
             {getRangeLabel(r)}
           </button>
         ))}
+      </div>
+
+      {/* Next Payout Info */}
+      <div className="rounded-md border border-blue-200 bg-blue-50/50 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-blue-500">📅</span>
+          <span className="text-sm text-blue-800">Next payout: <strong>~10th of next month</strong></span>
+        </div>
+        {data && (
+          <span className="text-sm text-blue-700">Payable: <strong>{data.summary.payable_commission.toLocaleString()} PKR</strong></span>
+        )}
       </div>
 
       {/* Error */}
@@ -205,79 +224,97 @@ export default function AffiliateOrdersPage() {
           <div className="border rounded p-2 sm:p-3 bg-white">
             <div className="text-[10px] sm:text-xs text-amber-600 uppercase">Pending</div>
             <div className="text-lg sm:text-xl font-semibold mt-0.5 text-amber-600">
-              {(data.summary.pending_commission / 1000).toFixed(1)}k
+              {formatAmount(data.summary.pending_commission)}
             </div>
           </div>
           <div className="border rounded p-2 sm:p-3 bg-white">
             <div className="text-[10px] sm:text-xs text-emerald-600 uppercase">Payable</div>
             <div className="text-lg sm:text-xl font-semibold mt-0.5 text-emerald-600">
-              {(data.summary.payable_commission / 1000).toFixed(1)}k
+              {formatAmount(data.summary.payable_commission)}
             </div>
           </div>
           <div className="border rounded p-2 sm:p-3 bg-white">
             <div className="text-[10px] sm:text-xs text-blue-600 uppercase">Paid</div>
             <div className="text-lg sm:text-xl font-semibold mt-0.5 text-blue-600">
-              {(data.summary.paid_commission / 1000).toFixed(1)}k
+              {formatAmount(data.summary.paid_commission)}
             </div>
           </div>
         </div>
       )}
 
+      {/* Status Legend - visible 1-line summary */}
+      <div className="text-sm text-gray-600 bg-gray-50 rounded px-3 py-2 border">
+        💡 <strong>Pending</strong> = delivered but within return window • <strong>Payable</strong> = cleared for payout • <strong>Paid</strong> = included in payout
+      </div>
+
       {/* Orders Table - mobile-friendly with expandable rows */}
       {data && !loading && (
         <div className="border rounded-lg bg-white overflow-hidden">
-          {allOrders.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <p className="font-medium">No orders found for {getRangeLabel(range).toLowerCase()}</p>
-              <p className="text-sm mt-1">Orders will appear here when customers use your referral code.</p>
-            </div>
-          ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Order</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                      <th className="text-right px-4 py-3 font-medium text-gray-600">Commission</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Paid In</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allOrders.map((order) => (
-                      <React.Fragment key={order.id}>
-                        <tr 
-                          className="border-b hover:bg-gray-50 cursor-pointer"
-                          onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
-                        >
-                          <td className="px-4 py-3 font-mono text-gray-700">{order.order_code}</td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(order.date)}</td>
-                          <td className="px-4 py-3 text-right font-medium">
-                            {order.commission_amount.toLocaleString()} PKR
-                          </td>
-                          <td className="px-4 py-3">{getStatusBadge(order.commission_status)}</td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">
-                            {order.paid_in || '—'}
+          {/* Always show table headers */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Order Date</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Order Total</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Commission</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Commission Status</th>
+                </tr>
+              </thead>
+              {allOrders.length === 0 ? (
+                <tbody>
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                      <p className="font-medium">No orders found for {getRangeLabel(range).toLowerCase()}</p>
+                      <p className="text-sm mt-1">Orders will appear here when customers use your referral code.</p>
+                    </td>
+                  </tr>
+                </tbody>
+              ) : (
+                <tbody>
+                  {allOrders.map((order) => (
+                    <React.Fragment key={order.id}>
+                      <tr 
+                        className="border-b hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
+                      >
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(order.date)}</td>
+                        <td className="px-4 py-3 font-mono text-gray-700">{order.order_code}</td>
+                        <td className="px-4 py-3">{getDeliveryBadge(order.delivery_status)}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">
+                          {order.order_total.toLocaleString()} PKR
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          {order.commission_amount.toLocaleString()} PKR
+                        </td>
+                        <td className="px-4 py-3">{getStatusBadge(order.commission_status)}</td>
+                      </tr>
+                      {expandedOrder === order.id && (
+                        <tr className="bg-gray-50 border-b">
+                          <td colSpan={6} className="px-4 py-2 text-xs text-gray-600">
+                            <span className="font-medium">Customer:</span> {order.customer}
+                            {order.paid_in && <span className="ml-3"><span className="font-medium">Paid in:</span> {order.paid_in}</span>}
                           </td>
                         </tr>
-                        {expandedOrder === order.id && (
-                          <tr className="bg-gray-50 border-b">
-                            <td colSpan={5} className="px-4 py-2 text-xs text-gray-600">
-                              <span className="font-medium">Customer:</span> {order.customer} • 
-                              <span className="font-medium ml-2">Delivery:</span> {getDeliveryBadge(order.delivery_status)}
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              )}
+            </table>
+          </div>
 
-              {/* Mobile List */}
-              <div className="sm:hidden divide-y">
+          {/* Mobile view */}
+          <div className="sm:hidden">
+            {allOrders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <p className="font-medium">No orders found for {getRangeLabel(range).toLowerCase()}</p>
+                <p className="text-sm mt-1">Orders will appear here when customers use your referral code.</p>
+              </div>
+            ) : (
+            <div className="divide-y">
                 {allOrders.map((order) => (
                   <div 
                     key={order.id} 
@@ -303,8 +340,8 @@ export default function AffiliateOrdersPage() {
                   </div>
                 ))}
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -321,21 +358,41 @@ export default function AffiliateOrdersPage() {
         </div>
       )}
 
-      {/* Collapsible Help */}
+      {/* Status Legend - collapsible detailed help */}
       <div className="border-t pt-4">
         <button
           onClick={() => setShowHelp(!showHelp)}
-          className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
         >
           <span>{showHelp ? '▼' : '▶'}</span>
-          What do these statuses mean?
+          How order status affects commission
         </button>
         {showHelp && (
-          <div className="mt-2 text-xs text-gray-500 space-y-1 pl-4">
-            <p><strong>Pending:</strong> Order delivered, waiting for 10-day hold period</p>
-            <p><strong>Payable:</strong> Ready for next payout (usually ~10th of month)</p>
-            <p><strong>Paid:</strong> Included in a completed payout</p>
-            <p><strong>Void:</strong> Not payable due to return, refund, or failed delivery</p>
+          <div className="mt-3 text-sm text-gray-600 space-y-2 pl-4 border-l-2 border-gray-200">
+            <p className="flex items-center gap-2">
+              <span className="w-24 font-medium">Delivered</span>
+              <span>→</span>
+              <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">Pending</span>
+              <span className="text-gray-400">(10-day hold for returns)</span>
+            </p>
+            <p className="flex items-center gap-2">
+              <span className="w-24 font-medium">After 10 days</span>
+              <span>→</span>
+              <span className="px-2 py-0.5 text-xs rounded bg-emerald-100 text-emerald-700">Payable</span>
+              <span className="text-gray-400">(ready for next payout)</span>
+            </p>
+            <p className="flex items-center gap-2">
+              <span className="w-24 font-medium">Payout sent</span>
+              <span>→</span>
+              <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Paid</span>
+              <span className="text-gray-400">(included in payout)</span>
+            </p>
+            <p className="flex items-center gap-2">
+              <span className="w-24 font-medium">Cancelled/Returned</span>
+              <span>→</span>
+              <span className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">Void</span>
+              <span className="text-gray-400">(commission removed)</span>
+            </p>
           </div>
         )}
       </div>

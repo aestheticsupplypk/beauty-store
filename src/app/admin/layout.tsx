@@ -51,7 +51,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     <div className="min-h-screen grid grid-cols-12">
       <aside className="col-span-12 md:col-span-3 lg:col-span-2 border-r p-4 space-y-3 flex flex-col">
         <h1 className="text-lg font-semibold">Aestheticsupplypk Admin</h1>
-        <nav className="flex flex-col gap-2 text-sm">
+        <nav className="flex flex-col gap-3 text-base">
           {canDashboard && <Link className="hover:underline" href="/admin">Dashboard</Link>}
           {canInventory && <Link className="hover:underline" href="/admin/inventory">Inventory</Link>}
           {canOrders && <Link className="hover:underline" href="/admin/orders">Orders</Link>}
