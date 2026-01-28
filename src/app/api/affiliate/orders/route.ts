@@ -112,7 +112,14 @@ export async function GET(req: Request) {
     if (commissionsErr) {
       console.error('[affiliate/orders] commissions query error', commissionsErr.message);
       // Fallback to orders table if affiliate_commissions doesn't exist yet
-      return await fallbackToOrdersQuery(supabase, affiliateId, dateFrom, dateTo, page, limit, offset);
+      return await fallbackToOrdersQuery(supabase, affiliateId, dateFrom, dateTo, page, limit, offset, range);
+    }
+
+    // Also fallback if affiliate_commissions table exists but has no data for this affiliate
+    // This handles the case where commissions haven't been migrated yet
+    if (!commissions || commissions.length === 0) {
+      console.log('[affiliate/orders] No commissions found, falling back to orders table');
+      return await fallbackToOrdersQuery(supabase, affiliateId, dateFrom, dateTo, page, limit, offset, range);
     }
 
     // Get payout batch info for paid commissions
@@ -216,7 +223,8 @@ async function fallbackToOrdersQuery(
   dateTo: Date,
   page: number,
   limit: number,
-  offset: number
+  offset: number,
+  range: string
 ) {
   const { data: orders, error: ordersErr } = await supabase
     .from('orders')
@@ -289,7 +297,7 @@ async function fallbackToOrdersQuery(
 
   return NextResponse.json({
     ok: true,
-    range: 'this_month',
+    range,
     orders: processedOrders,
     summary,
     pagination: {

@@ -1,4 +1,4 @@
-﻿import { cookies } from "next/headers";
+import { cookies } from "next/headers";
 import CheckoutClient from "./CheckoutClient";
 
 export const dynamic = 'force-dynamic';

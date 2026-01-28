@@ -53,7 +53,7 @@ export async function GET() {
 
     const { data: orders, error: ordersErr } = await supabase
       .from('orders')
-      .select('id, created_at, total_amount, grand_total, affiliate_commission_amount, customer_name, status, delivered_at, delivery_status')
+      .select('id, created_at, total_amount, grand_total, affiliate_commission_amount, customer_name, phone, city, status, delivered_at, delivery_status')
       .eq('affiliate_id', affiliateId)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -150,6 +150,8 @@ export async function GET() {
         grand_total: Number(r.grand_total || 0),
         affiliate_commission_amount: Number(r.affiliate_commission_amount || 0),
         customer_name: r.customer_name || null,
+        phone: r.phone || null,
+        city: r.city || null,
         delivery_status: r.delivery_status || null,
       })),
     });

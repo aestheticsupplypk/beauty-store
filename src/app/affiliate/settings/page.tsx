@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import Link from 'next/link';
+import MobileNav from '@/components/affiliate/MobileNav';
 
 type AffiliateProfile = {
   id: string;
@@ -27,6 +28,13 @@ export default function AffiliateSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [profile, setProfile] = useState<AffiliateProfile | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    await supabaseBrowser.auth.signOut();
+    window.location.href = '/affiliate/dashboard';
+  }
 
   // Form state
   const [phone, setPhone] = useState('');
@@ -151,6 +159,9 @@ export default function AffiliateSettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      {/* Mobile Navigation */}
+      <MobileNav affiliateName={profile.name} affiliateCity={profile.city} />
+      
       <div className="flex items-center justify-between">
         <div>
           <Link href="/affiliate/dashboard" className="text-emerald-600 hover:text-emerald-700 text-sm">
@@ -159,6 +170,13 @@ export default function AffiliateSettingsPage() {
           <h1 className="text-2xl font-semibold mt-2">Account Settings</h1>
           <p className="text-sm text-gray-600 mt-1">Update your contact info and payout details</p>
         </div>
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="hidden md:block text-sm text-gray-500 hover:text-red-600 disabled:opacity-50"
+        >
+          {signingOut ? 'Signing out...' : '🚪 Sign Out'}
+        </button>
       </div>
 
       {/* Payout Readiness Status */}
@@ -412,6 +430,25 @@ export default function AffiliateSettingsPage() {
       <div className="text-xs text-gray-500 space-y-1 pt-4 border-t">
         <p>Your payout information is kept secure and only used for commission payments.</p>
         <p>Payouts are processed monthly, usually around the 10th.</p>
+      </div>
+
+      {/* Footer Links */}
+      <div className="flex flex-wrap gap-4 text-sm text-gray-500 pt-4 border-t">
+        <Link href="/affiliate/orders" className="hover:text-emerald-600">
+          View All Orders
+        </Link>
+        <span>•</span>
+        <Link href="/affiliate/settings" className="hover:text-emerald-600">
+          Account Settings
+        </Link>
+        <span>•</span>
+        <a href="/affiliate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
+          Terms & Conditions
+        </a>
+        <span>•</span>
+        <a href="https://wa.me/923001234567" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
+          Contact Support
+        </a>
       </div>
     </div>
   );

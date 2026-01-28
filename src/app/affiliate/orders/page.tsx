@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
+import MobileNav from '@/components/affiliate/MobileNav';
 
 type Order = {
   id: string;
@@ -46,6 +47,13 @@ export default function AffiliateOrdersPage() {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    await supabaseBrowser.auth.signOut();
+    window.location.href = '/affiliate/dashboard';
+  }
 
   useEffect(() => {
     checkAuth();
@@ -155,14 +163,18 @@ export default function AffiliateOrdersPage() {
   }
 
   function formatAmount(amount: number) {
-    if (amount >= 1000) {
-      return `${(amount / 1000).toFixed(1)}k`;
+    // Only abbreviate for amounts >= 10,000 to avoid confusion
+    if (amount >= 10000) {
+      return `${(amount / 1000).toFixed(1)}k PKR`;
     }
     return `${amount.toLocaleString()} PKR`;
   }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      {/* Mobile Navigation */}
+      <MobileNav />
+      
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -172,6 +184,13 @@ export default function AffiliateOrdersPage() {
           <h1 className="text-2xl font-semibold mt-2">Order History</h1>
           <p className="text-sm text-gray-600 mt-1">View your orders and commission status</p>
         </div>
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="hidden md:block text-sm text-gray-500 hover:text-red-600 disabled:opacity-50"
+        >
+          {signingOut ? 'Signing out...' : '🚪 Sign Out'}
+        </button>
       </div>
 
       {/* Range Tabs */}
@@ -257,7 +276,8 @@ export default function AffiliateOrdersPage() {
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Order Date</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Order ID</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Customer</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Order Status</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Order Total</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Commission</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Commission Status</th>
@@ -266,7 +286,7 @@ export default function AffiliateOrdersPage() {
               {allOrders.length === 0 ? (
                 <tbody>
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                       <p className="font-medium">No orders found for {getRangeLabel(range).toLowerCase()}</p>
                       <p className="text-sm mt-1">Orders will appear here when customers use your referral code.</p>
                     </td>
@@ -282,6 +302,7 @@ export default function AffiliateOrdersPage() {
                       >
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(order.date)}</td>
                         <td className="px-4 py-3 font-mono text-gray-700">{order.order_code}</td>
+                        <td className="px-4 py-3 text-gray-700">{order.customer}</td>
                         <td className="px-4 py-3">{getDeliveryBadge(order.delivery_status)}</td>
                         <td className="px-4 py-3 text-right text-gray-600">
                           {order.order_total.toLocaleString()} PKR
@@ -293,9 +314,8 @@ export default function AffiliateOrdersPage() {
                       </tr>
                       {expandedOrder === order.id && (
                         <tr className="bg-gray-50 border-b">
-                          <td colSpan={6} className="px-4 py-2 text-xs text-gray-600">
-                            <span className="font-medium">Customer:</span> {order.customer}
-                            {order.paid_in && <span className="ml-3"><span className="font-medium">Paid in:</span> {order.paid_in}</span>}
+                          <td colSpan={7} className="px-4 py-2 text-xs text-gray-600">
+                            {order.paid_in && <span><span className="font-medium">Paid in:</span> {order.paid_in}</span>}
                           </td>
                         </tr>
                       )}
@@ -362,39 +382,58 @@ export default function AffiliateOrdersPage() {
       <div className="border-t pt-4">
         <button
           onClick={() => setShowHelp(!showHelp)}
-          className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          className="text-base text-gray-600 hover:text-gray-800 flex items-center gap-2 font-medium"
         >
           <span>{showHelp ? '▼' : '▶'}</span>
           How order status affects commission
         </button>
         {showHelp && (
-          <div className="mt-3 text-sm text-gray-600 space-y-2 pl-4 border-l-2 border-gray-200">
-            <p className="flex items-center gap-2">
-              <span className="w-24 font-medium">Delivered</span>
-              <span>→</span>
-              <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">Pending</span>
-              <span className="text-gray-400">(10-day hold for returns)</span>
+          <div className="mt-4 text-base text-gray-700 space-y-3 pl-4 border-l-2 border-gray-200">
+            <p className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="w-full sm:w-40 font-medium shrink-0">Delivered</span>
+              <span className="hidden sm:inline">→</span>
+              <span className="px-2.5 py-1 text-sm rounded bg-amber-100 text-amber-700 font-medium">Pending</span>
+              <span className="text-gray-500">(10-day hold for returns)</span>
             </p>
-            <p className="flex items-center gap-2">
-              <span className="w-24 font-medium">After 10 days</span>
-              <span>→</span>
-              <span className="px-2 py-0.5 text-xs rounded bg-emerald-100 text-emerald-700">Payable</span>
-              <span className="text-gray-400">(ready for next payout)</span>
+            <p className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="w-full sm:w-40 font-medium shrink-0">After 10 days</span>
+              <span className="hidden sm:inline">→</span>
+              <span className="px-2.5 py-1 text-sm rounded bg-emerald-100 text-emerald-700 font-medium">Payable</span>
+              <span className="text-gray-500">(ready for next payout)</span>
             </p>
-            <p className="flex items-center gap-2">
-              <span className="w-24 font-medium">Payout sent</span>
-              <span>→</span>
-              <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Paid</span>
-              <span className="text-gray-400">(included in payout)</span>
+            <p className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="w-full sm:w-40 font-medium shrink-0">Payout sent</span>
+              <span className="hidden sm:inline">→</span>
+              <span className="px-2.5 py-1 text-sm rounded bg-blue-100 text-blue-700 font-medium">Paid</span>
+              <span className="text-gray-500">(included in payout)</span>
             </p>
-            <p className="flex items-center gap-2">
-              <span className="w-24 font-medium">Cancelled/Returned</span>
-              <span>→</span>
-              <span className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">Void</span>
-              <span className="text-gray-400">(commission removed)</span>
+            <p className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="w-full sm:w-40 font-medium shrink-0">Cancelled/Returned</span>
+              <span className="hidden sm:inline">→</span>
+              <span className="px-2.5 py-1 text-sm rounded bg-gray-100 text-gray-600 font-medium">Void</span>
+              <span className="text-gray-500">(commission removed)</span>
             </p>
           </div>
         )}
+      </div>
+
+      {/* Footer Links */}
+      <div className="flex flex-wrap gap-4 text-sm text-gray-500 pt-4 border-t">
+        <Link href="/affiliate/orders" className="hover:text-emerald-600">
+          View All Orders
+        </Link>
+        <span>•</span>
+        <Link href="/affiliate/settings" className="hover:text-emerald-600">
+          Account Settings
+        </Link>
+        <span>•</span>
+        <a href="/affiliate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
+          Terms & Conditions
+        </a>
+        <span>•</span>
+        <a href="https://wa.me/923001234567" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
+          Contact Support
+        </a>
       </div>
     </div>
   );

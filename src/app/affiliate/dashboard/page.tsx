@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import Link from "next/link";
+import MobileNav from "@/components/affiliate/MobileNav";
 
 type AffiliateSummary = {
   affiliate: {
@@ -393,40 +394,89 @@ export default function AffiliateDashboardPage() {
       )}
 
       {data && (
-        <div className="space-y-5">
+        <div className="space-y-3 md:space-y-5 max-w-md mx-auto md:max-w-none overflow-x-hidden">
+          {/* Mobile Navigation */}
+          <MobileNav 
+            affiliateName={data.affiliate.name} 
+            affiliateCity={data.affiliate.city || undefined}
+            pageTitle="Affiliate Dashboard"
+          />
+          
           {/* Payout Info Incomplete Warning */}
           {(!data.affiliate.payout_method || !data.affiliate.phone) && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-amber-600">⚠️</span>
-                <span className="text-sm font-medium text-amber-800">Payout info incomplete</span>
-                <span className="text-sm text-amber-700">— Add your payout method to receive earnings</span>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-amber-500 shrink-0">⚠️</span>
+                <span className="text-xs md:text-sm font-medium text-amber-800 truncate">Payout incomplete</span>
               </div>
               <Link
                 href="/affiliate/settings"
-                className="text-sm font-medium text-amber-700 hover:text-amber-900 underline"
+                className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
               >
                 Fix now →
               </Link>
             </div>
           )}
 
-          {/* Notifications Area */}
-          <div className="rounded-md border border-blue-200 bg-blue-50/50 px-4 py-3">
-            <div className="flex items-start gap-2">
-              <span className="text-blue-500">🔔</span>
-              <div className="text-sm text-blue-800">
+          {/* Notifications Area - Compact */}
+          <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-blue-500 shrink-0">🔔</span>
+              <div className="text-xs md:text-sm text-blue-700 truncate">
                 {data.stats.total_orders === 0 ? (
-                  <span>Your first order will appear here once a client uses your code.</span>
+                  <span>Your first order will appear once a client uses your code.</span>
                 ) : (
-                  <span>Next payout runs on the 10th of each month. Payable amount: <strong>{Number(data.stats.payable_commission || 0).toLocaleString()} PKR</strong></span>
+                  <span>Next payout: <strong>~10th</strong> • Payable: <strong>{Number(data.stats.payable_commission || 0).toLocaleString()} PKR</strong></span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* 1️⃣ Identity + Referral Actions */}
-          <div className="border rounded p-4 bg-gray-50 space-y-3">
+          {/* Mobile Referral Code Card */}
+          <div className="md:hidden rounded-lg border-2 border-emerald-400 bg-emerald-50 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-600">Your referral code</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(data.affiliate.code);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch {}
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white text-xs font-medium"
+              >
+                {copied ? "✓ Copied" : "Copy"}
+              </button>
+            </div>
+            <div className="bg-white rounded px-3 py-2 border border-emerald-200">
+              <div className="font-mono text-lg font-bold tracking-widest text-gray-900 whitespace-nowrap">
+                {data.affiliate.code}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0 bg-white rounded px-2 py-1.5 border text-xs text-gray-500 truncate">
+                aestheticpk.com/r/{data.affiliate.code}
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(`https://aestheticpk.com/r/${data.affiliate.code}`);
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2000);
+                  } catch {}
+                }}
+                className="px-2 py-1.5 text-xs text-emerald-600 border border-emerald-200 rounded"
+              >
+                {copiedLink ? "✓" : "Copy"}
+              </button>
+            </div>
+          </div>
+
+          {/* 1️⃣ Identity + Referral Actions - Hidden on mobile (use drawer instead) */}
+          <div className="hidden md:block border rounded p-4 bg-gray-50 space-y-3">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-lg font-semibold">{data.affiliate.name}</div>
@@ -651,41 +701,40 @@ export default function AffiliateDashboardPage() {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="border rounded p-3 bg-white">
-              <div className="text-xs uppercase text-gray-500">Total orders</div>
-              <div className="text-xl font-semibold mt-1">{data.stats.total_orders}</div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
+            <div className="border rounded p-2 md:p-3 bg-white">
+              <div className="text-[10px] md:text-xs uppercase text-gray-500">Orders</div>
+              <div className="text-lg md:text-xl font-semibold">{data.stats.total_orders}</div>
             </div>
-            <div className="border rounded p-3 bg-white">
-              <div className="text-xs uppercase text-gray-500">Total sales</div>
-              <div className="text-xl font-semibold mt-1">
-                {Number(data.stats.total_sales || 0).toLocaleString()} PKR
+            <div className="border rounded p-2 md:p-3 bg-white">
+              <div className="text-[10px] md:text-xs uppercase text-gray-500">Sales</div>
+              <div className="text-lg md:text-xl font-semibold">
+                {Number(data.stats.total_sales || 0).toLocaleString()}
               </div>
             </div>
-            <div className="border rounded p-3 bg-white">
-              <div className="text-xs uppercase text-gray-500">Earned</div>
-              <div className="text-xl font-semibold mt-1 text-emerald-700">
-                {Number(data.stats.total_commission || 0).toLocaleString()} PKR
+            <div className="border rounded p-2 md:p-3 bg-white">
+              <div className="text-[10px] md:text-xs uppercase text-gray-500">Earned</div>
+              <div className="text-lg md:text-xl font-semibold text-emerald-700">
+                {Number(data.stats.total_commission || 0).toLocaleString()}
               </div>
             </div>
-            <div className="border rounded p-3 bg-white">
-              <div className="text-xs uppercase text-gray-500">Pending</div>
-              <div className="text-xl font-semibold mt-1 text-amber-600">
-                {Number(data.stats.pending_commission || 0).toLocaleString()} PKR
+            <div className="border rounded p-2 md:p-3 bg-white">
+              <div className="text-[10px] md:text-xs uppercase text-gray-500">Pending</div>
+              <div className="text-lg md:text-xl font-semibold text-amber-600">
+                {Number(data.stats.pending_commission || 0).toLocaleString()}
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">10-day hold</div>
             </div>
-            <div className="border rounded p-3 bg-white border-emerald-200 bg-emerald-50/30">
-              <div className="text-xs uppercase text-emerald-700">Payable</div>
-              <div className="text-xl font-semibold mt-1 text-emerald-700">
+            <div className="border rounded p-2 md:p-3 bg-white border-emerald-200 bg-emerald-50/30 col-span-2 md:col-span-1">
+              <div className="text-[10px] md:text-xs uppercase text-emerald-700">Payable</div>
+              <div className="text-lg md:text-xl font-semibold text-emerald-700">
                 {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
               </div>
-              <div className="text-xs text-emerald-600 mt-0.5">Included in next payout</div>
+              <div className="text-[10px] md:text-xs text-emerald-600">Next payout</div>
             </div>
           </div>
 
-          {/* Commission explanation line */}
-          <div className="text-sm text-gray-600 -mt-1 bg-gray-50 rounded px-3 py-2 border border-gray-100">
+          {/* Commission explanation line - hidden on mobile to save space */}
+          <div className="hidden md:block text-sm text-gray-600 -mt-1 bg-gray-50 rounded px-3 py-2 border border-gray-100">
             💡 Commission becomes <strong>Pending</strong> after delivery, and <strong>Payable</strong> after the 10-day return window.
           </div>
 
@@ -798,9 +847,9 @@ export default function AffiliateDashboardPage() {
           )}
 
           {/* 5️⃣ Recent Orders (Last 3 only) */}
-          <div className="border rounded p-4 bg-white">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-medium text-base">Recent orders</h2>
+          <div className="border rounded p-3 md:p-4 bg-white">
+            <div className="flex items-center justify-between mb-2 md:mb-3">
+              <h2 className="font-medium text-sm md:text-base">Recent orders</h2>
               {data.orders.length > 0 && (
                 <Link
                   href="/affiliate/orders"
@@ -830,23 +879,29 @@ export default function AffiliateDashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y divide-gray-100">
                 {data.orders.slice(0, 3).map((o) => (
-                  <div key={o.id} className="flex items-center justify-between py-2 border-b last:border-0 text-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="text-gray-500">#{String(o.id).slice(-6)}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        o.delivery_status === 'delivered' 
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : o.delivery_status === 'failed'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {o.delivery_status || 'Pending'}
+                  <div key={o.id} className="flex items-center justify-between py-2 text-sm">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 text-xs font-mono">#{String(o.id).slice(-6)}</span>
+                        <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded ${
+                          o.delivery_status === 'delivered' 
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : o.delivery_status === 'failed'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {o.delivery_status || 'Pending'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500 truncate">
+                        {(o as any).customer_name ? (o as any).customer_name.split(' ')[0] : ''} 
+                        {(o as any).city ? ` • ${(o as any).city}` : ''}
                       </span>
                     </div>
-                    <div className="text-right">
-                      <div className="font-medium">
+                    <div className="text-right shrink-0">
+                      <div className="font-semibold text-sm">
                         {Number(o.affiliate_commission_amount || 0).toLocaleString()} PKR
                       </div>
                     </div>
