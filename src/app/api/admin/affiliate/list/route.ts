@@ -82,6 +82,15 @@ export async function GET(request: NextRequest) {
       console.error('[admin/affiliate/list] payable query error', payErr.message);
     }
 
+    // Fetch all commissions for void rate calculation
+    const { data: allCommissions, error: commErr } = await supabase
+      .from('affiliate_commissions')
+      .select('affiliate_id, status')
+      .in('affiliate_id', ids);
+    if (commErr) {
+      console.error('[admin/affiliate/list] commissions query error', commErr.message);
+    }
+
     // Fetch tiers
     const { data: tiers, error: tierErr } = await supabase
       .from('affiliate_tiers')
@@ -100,6 +109,8 @@ export async function GET(request: NextRequest) {
       last_order_date: string | null;
       delivered_count_30d: number;
       payable_amount: number;
+      void_count: number;
+      commission_count: number;
     }> = {};
 
     const thirtyDaysAgo = new Date();
@@ -118,6 +129,8 @@ export async function GET(request: NextRequest) {
           last_order_date: null,
           delivered_count_30d: 0,
           payable_amount: 0,
+          void_count: 0,
+          commission_count: 0,
         };
       }
       
@@ -153,9 +166,34 @@ export async function GET(request: NextRequest) {
           last_order_date: null,
           delivered_count_30d: 0,
           payable_amount: 0,
+          void_count: 0,
+          commission_count: 0,
         };
       }
       statsById[aid].payable_amount += Number((pc as any).commission_amount || 0);
+    }
+
+    // Calculate void rates from all commissions
+    for (const c of allCommissions || []) {
+      const ac = c as any;
+      const aid = String(ac.affiliate_id || '');
+      if (!aid) continue;
+      if (!statsById[aid]) {
+        statsById[aid] = {
+          total_orders: 0,
+          total_sales: 0,
+          total_commission: 0,
+          last_order_date: null,
+          delivered_count_30d: 0,
+          payable_amount: 0,
+          void_count: 0,
+          commission_count: 0,
+        };
+      }
+      statsById[aid].commission_count += 1;
+      if (ac.status === 'void') {
+        statsById[aid].void_count += 1;
+      }
     }
 
     // Calculate tier for each affiliate
@@ -179,7 +217,14 @@ export async function GET(request: NextRequest) {
         last_order_date: null,
         delivered_count_30d: 0,
         payable_amount: 0,
+        void_count: 0,
+        commission_count: 0,
       };
+      
+      // Calculate void rate (percentage of voided commissions)
+      const voidRate = stats.commission_count > 0 
+        ? Math.round((stats.void_count / stats.commission_count) * 100) 
+        : 0;
       
       const currentTier = getTierForCount(stats.delivered_count_30d);
       
@@ -221,6 +266,8 @@ export async function GET(request: NextRequest) {
           last_order_date: stats.last_order_date,
           delivered_count_30d: stats.delivered_count_30d,
           payable_amount: stats.payable_amount,
+          void_count: stats.void_count,
+          void_rate: voidRate,
         },
         tier: {
           name: currentTier.name,

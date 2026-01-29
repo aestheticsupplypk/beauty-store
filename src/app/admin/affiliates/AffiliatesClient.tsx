@@ -25,6 +25,8 @@ type Affiliate = {
     last_order_date: string | null;
     delivered_count_30d: number;
     payable_amount: number;
+    void_count: number;
+    void_rate: number;
   };
   tier: {
     name: string;
@@ -306,6 +308,7 @@ export default function AffiliatesClient() {
                 <th className="py-2 px-3">Code</th>
                 <th className="py-2 px-3">Tier</th>
                 <th className="py-2 px-3 text-right">Orders</th>
+                <th className="py-2 px-3 text-right">Void Rate</th>
                 <th className="py-2 px-3 text-right">Sales (PKR)</th>
                 <th className="py-2 px-3 text-right">Commission</th>
                 <th className="py-2 px-3 text-right">Payable</th>
@@ -316,7 +319,7 @@ export default function AffiliatesClient() {
             <tbody>
               {sortedAffiliates.length === 0 ? (
                 <tr>
-                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={13}>
+                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={14}>
                     {hasActiveFilters ? 'No affiliates match your filters.' : 'No affiliates created yet.'}
                   </td>
                 </tr>
@@ -348,6 +351,19 @@ export default function AffiliatesClient() {
                       {getTierBadge(a.tier.name)}
                     </td>
                     <td className="py-2 px-3 text-right">{a.stats.total_orders}</td>
+                    <td className="py-2 px-3 text-right">
+                      {a.stats.void_rate > 20 ? (
+                        <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700" title={`${a.stats.void_count} voided orders`}>
+                          {a.stats.void_rate}%
+                        </span>
+                      ) : a.stats.void_rate > 0 ? (
+                        <span className="text-gray-500" title={`${a.stats.void_count} voided orders`}>
+                          {a.stats.void_rate}%
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">0%</span>
+                      )}
+                    </td>
                     <td className="py-2 px-3 text-right">{Number(a.stats.total_sales || 0).toLocaleString()}</td>
                     <td className="py-2 px-3 text-right">{Number(a.stats.total_commission || 0).toLocaleString()}</td>
                     <td className="py-2 px-3 text-right">
