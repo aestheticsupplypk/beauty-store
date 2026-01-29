@@ -752,16 +752,28 @@ export default function AffiliateDashboardPage() {
                 {Number(data.stats.pending_commission || 0).toLocaleString()}
               </div>
             </div>
-            <div className="border rounded p-2 md:p-3 bg-white border-emerald-200 bg-emerald-50/30 col-span-2 md:col-span-1">
+            <div className="border rounded p-2 md:p-3 bg-white border-emerald-200 bg-emerald-50/30">
               <div className="text-[10px] md:text-xs uppercase text-emerald-700 flex items-center gap-1">
                 Payable
                 <span className="text-emerald-500 cursor-help" title="Ready for payout - will be included in next month's payment">ⓘ</span>
               </div>
               <div className="text-lg md:text-xl font-semibold text-emerald-700">
-                {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
+                {Number(data.stats.payable_commission || 0).toLocaleString()}
               </div>
               <div className="text-[10px] md:text-xs text-emerald-600">Next payout</div>
             </div>
+            {/* Void card - only show if there are voided commissions */}
+            {(data.stats.void_commission || 0) > 0 && (
+              <div className="border rounded p-2 md:p-3 bg-gray-50 border-gray-200">
+                <div className="text-[10px] md:text-xs uppercase text-gray-500 flex items-center gap-1">
+                  Voided
+                  <span className="text-gray-400 cursor-help" title="Commission removed due to cancelled/returned orders">ⓘ</span>
+                </div>
+                <div className="text-lg md:text-xl font-semibold text-gray-400 line-through">
+                  {Number(data.stats.void_commission || 0).toLocaleString()}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Commission explanation line - hidden on mobile to save space */}

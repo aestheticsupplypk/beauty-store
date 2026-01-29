@@ -99,13 +99,21 @@ export async function GET() {
     const totalSales = activeRows.reduce((s, r) => s + Number(r.orders?.total_amount || 0), 0);
     const totalCommission = activeRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0);
     
-    // Stats based purely on commission_status (single source of truth)
+    // ============================================================================
+    // UI-LEVEL PAYABLE LOGIC (removes cron dependency)
+    // Treat pending + payable_at <= now() as "effectively payable" in metrics
+    // This makes reporting correct even if the scheduled job hasn't run yet
+    // ============================================================================
+    const now = new Date();
+    
+    // Pending = status pending AND payable_at is in the future (or null = not yet delivered)
     const pendingCommission = rows
-      .filter(r => r.status === 'pending')
+      .filter(r => r.status === 'pending' && (!r.payable_at || new Date(r.payable_at) > now))
       .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
     
+    // Payable = status payable OR (status pending AND payable_at <= now)
     const payableCommission = rows
-      .filter(r => r.status === 'payable')
+      .filter(r => r.status === 'payable' || (r.status === 'pending' && r.payable_at && new Date(r.payable_at) <= now))
       .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
     
     const paidCommission = rows
@@ -116,12 +124,12 @@ export async function GET() {
       .filter(r => r.status === 'void')
       .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
     
-    // Find next payable date (earliest payable_at among pending commissions)
-    const pendingWithPayableAt = rows
-      .filter(r => r.status === 'pending' && r.payable_at)
+    // Find next payable date (earliest future payable_at among truly pending commissions)
+    const pendingWithFuturePayableAt = rows
+      .filter(r => r.status === 'pending' && r.payable_at && new Date(r.payable_at) > now)
       .map(r => new Date(r.payable_at))
       .sort((a, b) => a.getTime() - b.getTime());
-    const nextPayableDate = pendingWithPayableAt.length > 0 ? pendingWithPayableAt[0].toISOString() : null;
+    const nextPayableDate = pendingWithFuturePayableAt.length > 0 ? pendingWithFuturePayableAt[0].toISOString() : null;
 
     // Get affiliate's current tier
     let tierInfo = { tier_name: 'Bronze', delivered_count_30d: 0, next_tier_name: 'Silver', next_tier_threshold: 10 };

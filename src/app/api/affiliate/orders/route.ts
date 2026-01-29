@@ -191,17 +191,26 @@ export async function GET(req: Request) {
     // Calculate summary stats (from all records in range, not just current page)
     const { data: summaryData } = await supabase
       .from('affiliate_commissions')
-      .select('commission_amount, status')
+      .select('commission_amount, status, payable_at')
       .eq('affiliate_id', affiliateId)
       .gte('created_at', dateFrom.toISOString())
       .lte('created_at', dateTo.toISOString());
 
     const allRows = (summaryData || []) as any[];
+    const summaryNow = new Date();
+    
+    // UI-level payable logic: treat pending + payable_at <= now as payable
     const summary = {
       total_orders: allRows.length,
       total_commission: allRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0),
-      pending_commission: allRows.filter(r => r.status === 'pending').reduce((s, r) => s + Number(r.commission_amount || 0), 0),
-      payable_commission: allRows.filter(r => r.status === 'payable').reduce((s, r) => s + Number(r.commission_amount || 0), 0),
+      // Pending = status pending AND payable_at is in the future (or null)
+      pending_commission: allRows
+        .filter(r => r.status === 'pending' && (!r.payable_at || new Date(r.payable_at) > summaryNow))
+        .reduce((s, r) => s + Number(r.commission_amount || 0), 0),
+      // Payable = status payable OR (status pending AND payable_at <= now)
+      payable_commission: allRows
+        .filter(r => r.status === 'payable' || (r.status === 'pending' && r.payable_at && new Date(r.payable_at) <= summaryNow))
+        .reduce((s, r) => s + Number(r.commission_amount || 0), 0),
       paid_commission: allRows.filter(r => r.status === 'paid').reduce((s, r) => s + Number(r.commission_amount || 0), 0),
       void_commission: allRows.filter(r => r.status === 'void').reduce((s, r) => s + Number(r.commission_amount || 0), 0),
     };
