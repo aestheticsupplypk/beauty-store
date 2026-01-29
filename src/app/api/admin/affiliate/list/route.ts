@@ -82,11 +82,15 @@ export async function GET(request: NextRequest) {
       console.error('[admin/affiliate/list] payable query error', payErr.message);
     }
 
-    // Fetch all commissions for void rate calculation
+    // Fetch commissions from last 30 days for void rate calculation
+    const thirtyDaysAgoForVoid = new Date();
+    thirtyDaysAgoForVoid.setDate(thirtyDaysAgoForVoid.getDate() - 30);
+    
     const { data: allCommissions, error: commErr } = await supabase
       .from('affiliate_commissions')
-      .select('affiliate_id, status')
-      .in('affiliate_id', ids);
+      .select('affiliate_id, status, created_at')
+      .in('affiliate_id', ids)
+      .gte('created_at', thirtyDaysAgoForVoid.toISOString());
     if (commErr) {
       console.error('[admin/affiliate/list] commissions query error', commErr.message);
     }
@@ -268,6 +272,7 @@ export async function GET(request: NextRequest) {
           payable_amount: stats.payable_amount,
           void_count: stats.void_count,
           void_rate: voidRate,
+          commission_count_30d: stats.commission_count,
         },
         tier: {
           name: currentTier.name,

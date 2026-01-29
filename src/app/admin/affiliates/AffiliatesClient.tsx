@@ -27,6 +27,7 @@ type Affiliate = {
     payable_amount: number;
     void_count: number;
     void_rate: number;
+    commission_count_30d: number;
   };
   tier: {
     name: string;
@@ -352,12 +353,15 @@ export default function AffiliatesClient() {
                     </td>
                     <td className="py-2 px-3 text-right">{a.stats.total_orders}</td>
                     <td className="py-2 px-3 text-right">
-                      {a.stats.void_rate > 20 ? (
-                        <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700" title={`${a.stats.void_count} voided orders`}>
+                      {/* Guard against small sample sizes: need at least 5 orders for meaningful void rate */}
+                      {(a.stats.commission_count_30d || 0) < 5 ? (
+                        <span className="text-gray-300" title="Not enough orders (last 30 days) for void rate">—</span>
+                      ) : a.stats.void_rate > 20 ? (
+                        <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700" title={`${a.stats.void_count} voided in last 30 days`}>
                           {a.stats.void_rate}%
                         </span>
                       ) : a.stats.void_rate > 0 ? (
-                        <span className="text-gray-500" title={`${a.stats.void_count} voided orders`}>
+                        <span className="text-gray-500" title={`${a.stats.void_count} voided in last 30 days`}>
                           {a.stats.void_rate}%
                         </span>
                       ) : (
