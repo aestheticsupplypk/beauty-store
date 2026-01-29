@@ -248,9 +248,13 @@ async function fallbackToOrdersQuery(
     // Derive commission status (fallback only)
     let commissionStatus: 'pending' | 'payable' | 'paid' | 'void' = 'pending';
     
-    if (o.delivery_status === 'failed' || o.delivery_status === 'returned' || o.delivery_status === 'cancelled') {
+    // Check both order status and delivery_status for cancelled/failed orders
+    const orderStatus = (o.status || '').toLowerCase();
+    const deliveryStatus = (o.delivery_status || '').toLowerCase();
+    
+    if (orderStatus === 'cancelled' || deliveryStatus === 'failed' || deliveryStatus === 'returned' || deliveryStatus === 'cancelled') {
       commissionStatus = 'void';
-    } else if (o.delivery_status === 'delivered' && o.delivered_at) {
+    } else if (deliveryStatus === 'delivered' && o.delivered_at) {
       const deliveredDate = new Date(o.delivered_at);
       if (deliveredDate <= tenDaysAgo) {
         commissionStatus = 'payable';
@@ -265,11 +269,14 @@ async function fallbackToOrdersQuery(
     const city = o.city || '';
     const customerDisplay = [firstName, city, maskedPhone].filter(Boolean).join(' • ');
 
+    // Show cancelled status if order is cancelled
+    const displayDeliveryStatus = orderStatus === 'cancelled' ? 'cancelled' : (o.delivery_status || 'pending');
+
     return {
       id: o.id,
       order_code: `#${String(o.id).slice(-6).toUpperCase()}`,
       date: o.created_at,
-      delivery_status: o.delivery_status || 'pending',
+      delivery_status: displayDeliveryStatus,
       order_total: Number(o.grand_total || o.total_amount || 0),
       commission_amount: Number(o.affiliate_commission_amount || 0),
       commission_status: commissionStatus,
