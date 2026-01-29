@@ -54,21 +54,8 @@ export default function AffiliatesClient() {
   // Debounce timer for search
   const [searchTimer, setSearchTimer] = useState<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    loadAffiliates();
-  }, [statusFilter, cityFilter, tierFilter, hasPayableFilter, payoutReadyFilter, last30DaysFilter]);
-
-  // Auto-search with debounce
-  useEffect(() => {
-    if (searchTimer) clearTimeout(searchTimer);
-    const timer = setTimeout(() => {
-      loadAffiliates();
-    }, 300);
-    setSearchTimer(timer);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  async function loadAffiliates() {
+  // Memoized fetch function to avoid stale closures
+  const loadAffiliates = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -98,7 +85,22 @@ export default function AffiliatesClient() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [search, statusFilter, cityFilter, tierFilter, hasPayableFilter, payoutReadyFilter, last30DaysFilter]);
+
+  // Load affiliates when filters change
+  useEffect(() => {
+    loadAffiliates();
+  }, [loadAffiliates]);
+
+  // Auto-search with debounce (separate effect for search input)
+  useEffect(() => {
+    if (searchTimer) clearTimeout(searchTimer);
+    const timer = setTimeout(() => {
+      // loadAffiliates is already called by the main effect when search changes
+    }, 300);
+    setSearchTimer(timer);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   function clearFilters() {
     setSearch('');
@@ -297,6 +299,7 @@ export default function AffiliatesClient() {
             <thead>
               <tr className="border-b bg-gray-50 text-left text-xs uppercase text-gray-500">
                 <th className="py-2 px-3">Name</th>
+                <th className="py-2 px-3">Status</th>
                 <th className="py-2 px-3">Parlour</th>
                 <th className="py-2 px-3">City</th>
                 <th className="py-2 px-3">Phone</th>
@@ -313,7 +316,7 @@ export default function AffiliatesClient() {
             <tbody>
               {sortedAffiliates.length === 0 ? (
                 <tr>
-                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={12}>
+                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={13}>
                     {hasActiveFilters ? 'No affiliates match your filters.' : 'No affiliates created yet.'}
                   </td>
                 </tr>
@@ -321,12 +324,19 @@ export default function AffiliatesClient() {
                 sortedAffiliates.map((a) => (
                   <tr 
                     key={a.id} 
-                    className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
+                    className={`border-b last:border-0 cursor-pointer ${a.active ? 'hover:bg-gray-50' : 'bg-red-50 hover:bg-red-100'}`}
                     onClick={() => setSelectedAffiliateId(a.id)}
                   >
                     <td className="py-2 px-3 whitespace-nowrap">
                       <div className="font-medium">{a.name}</div>
                       {a.email && <div className="text-xs text-gray-500">{a.email}</div>}
+                    </td>
+                    <td className="py-2 px-3 whitespace-nowrap">
+                      {a.active ? (
+                        <span className="px-2 py-0.5 text-xs rounded bg-emerald-100 text-emerald-700">Active</span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700">Inactive</span>
+                      )}
                     </td>
                     <td className="py-2 px-3 whitespace-nowrap">{a.parlour_name || '—'}</td>
                     <td className="py-2 px-3 whitespace-nowrap">{a.city || '—'}</td>

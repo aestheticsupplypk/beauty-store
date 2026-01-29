@@ -51,47 +51,77 @@ export async function GET() {
 
     const affiliateId = String((affiliate as any).id);
 
-    const { data: orders, error: ordersErr } = await supabase
-      .from('orders')
-      .select('id, created_at, total_amount, grand_total, affiliate_commission_amount, customer_name, phone, city, status, delivered_at, delivery_status')
+    // ============================================================================
+    // FETCH FROM affiliate_commissions (SINGLE SOURCE OF TRUTH)
+    // ============================================================================
+    const { data: commissions, error: commissionsErr } = await supabase
+      .from('affiliate_commissions')
+      .select(`
+        id,
+        order_id,
+        commission_amount,
+        status,
+        payable_at,
+        void_reason,
+        created_at,
+        orders!inner (
+          id,
+          created_at,
+          customer_name,
+          phone,
+          city,
+          total_amount,
+          grand_total,
+          status,
+          delivery_status
+        )
+      `)
       .eq('affiliate_id', affiliateId)
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (ordersErr) {
-      console.error('[affiliate/me] orders error', ordersErr.message);
-      return NextResponse.json({ error: 'Failed to load orders' }, { status: 500 });
+    if (commissionsErr) {
+      console.error('[affiliate/me] commissions error', commissionsErr.message);
+      return NextResponse.json({ error: 'Failed to load commissions' }, { status: 500 });
     }
 
-    const rows = (orders || []) as any[];
-    const totalOrders = rows.length;
-    const totalSales = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
-    const totalCommission = rows.reduce((s, r) => s + Number(r.affiliate_commission_amount || 0), 0);
+    const rows = (commissions || []) as any[];
     
-    // Calculate pending commission: orders delivered but within 10 days (not yet payable)
-    const now = new Date();
-    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-    const pendingCommission = rows.reduce((s, r) => {
-      // If delivered but delivered_at is within last 10 days, it's pending
-      if (r.status === 'delivered' && r.delivered_at) {
-        const deliveredDate = new Date(r.delivered_at);
-        if (deliveredDate > tenDaysAgo) {
-          return s + Number(r.affiliate_commission_amount || 0);
-        }
-      }
-      return s;
-    }, 0);
-
-    // Calculate payable commission (delivered > 10 days ago, not yet paid)
-    const payableCommission = rows.reduce((s, r) => {
-      if (r.status === 'delivered' && r.delivered_at) {
-        const deliveredDate = new Date(r.delivered_at);
-        if (deliveredDate <= tenDaysAgo) {
-          return s + Number(r.affiliate_commission_amount || 0);
-        }
-      }
-      return s;
-    }, 0);
+    // ============================================================================
+    // CALCULATE STATS FROM affiliate_commissions
+    // ============================================================================
+    // Total orders = all orders (including void) so affiliate sees their activity
+    const totalOrders = rows.length;
+    // Active orders = excluding void (for sales/commission calculations)
+    const activeRows = rows.filter(r => r.status !== 'void');
+    const activeOrders = activeRows.length;
+    
+    const totalSales = activeRows.reduce((s, r) => s + Number(r.orders?.total_amount || 0), 0);
+    const totalCommission = activeRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    
+    // Stats based purely on commission_status (single source of truth)
+    const pendingCommission = rows
+      .filter(r => r.status === 'pending')
+      .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    
+    const payableCommission = rows
+      .filter(r => r.status === 'payable')
+      .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    
+    const paidCommission = rows
+      .filter(r => r.status === 'paid')
+      .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    
+    const voidCommission = rows
+      .filter(r => r.status === 'void')
+      .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    
+    // Find next payable date (earliest payable_at among pending commissions)
+    const pendingWithPayableAt = rows
+      .filter(r => r.status === 'pending' && r.payable_at)
+      .map(r => new Date(r.payable_at))
+      .sort((a, b) => a.getTime() - b.getTime());
+    const nextPayableDate = pendingWithPayableAt.length > 0 ? pendingWithPayableAt[0].toISOString() : null;
 
     // Get affiliate's current tier
     let tierInfo = { tier_name: 'Bronze', delivered_count_30d: 0, next_tier_name: 'Silver', next_tier_threshold: 10 };
@@ -137,23 +167,43 @@ export async function GET() {
       },
       stats: {
         total_orders: totalOrders,
+        active_orders: activeOrders,
         total_sales: totalSales,
         total_commission: totalCommission,
         pending_commission: pendingCommission,
         payable_commission: payableCommission,
+        paid_commission: paidCommission,
+        void_commission: voidCommission,
+        next_payable_date: nextPayableDate,
       },
       tier: tierInfo,
-      orders: rows.map((r) => ({
-        id: r.id,
-        created_at: r.created_at,
-        total_amount: Number(r.total_amount || 0),
-        grand_total: Number(r.grand_total || 0),
-        affiliate_commission_amount: Number(r.affiliate_commission_amount || 0),
-        customer_name: r.customer_name || null,
-        phone: r.phone || null,
-        city: r.city || null,
-        delivery_status: r.delivery_status || null,
-      })),
+      orders: rows.map((r) => {
+        const o = r.orders;
+        // Show both order status and commission status
+        const orderStatus = (o?.status || '').toLowerCase();
+        const deliveryStatus = o?.delivery_status || null;
+        const commissionStatus = r.status; // From affiliate_commissions (source of truth)
+        
+        return {
+          id: r.order_id,
+          created_at: o?.created_at || r.created_at,
+          total_amount: Number(o?.total_amount || 0),
+          grand_total: Number(o?.grand_total || 0),
+          affiliate_commission_amount: Number(r.commission_amount || 0),
+          customer_name: o?.customer_name || null,
+          phone: o?.phone || null,
+          city: o?.city || null,
+          // Order status (pending/packed/shipped/delivered/cancelled)
+          order_status: orderStatus,
+          delivery_status: deliveryStatus,
+          // Commission status (pending/payable/paid/void) - from affiliate_commissions
+          commission_status: commissionStatus,
+          // Payable date (when commission becomes payable)
+          payable_at: r.payable_at || null,
+          // Void reason (if voided)
+          void_reason: r.void_reason || null,
+        };
+      }),
     });
   } catch (e: any) {
     console.error('[affiliate/me] exception', e);

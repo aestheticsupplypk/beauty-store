@@ -9,7 +9,7 @@ async function fetchOrders(search: Search) {
   let query = supabase
     .from('orders')
     .select(
-      'id, order_code, source, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount, grand_total, amount_paid, amount_due'
+      'id, order_code, source, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount, grand_total, amount_paid, amount_due, affiliate_id'
     )
     .order('created_at', { ascending: false })
     .limit(50);
@@ -18,7 +18,11 @@ async function fetchOrders(search: Search) {
     query = query.eq('status', search.status);
   }
   if (search.source && search.source !== 'all') {
-    query = query.eq('source', search.source);
+    if (search.source === 'affiliate') {
+      query = query.not('affiliate_id', 'is', null);
+    } else {
+      query = query.eq('source', search.source);
+    }
   }
   if (search.q && search.q.trim()) {
     const q = `%${search.q.trim()}%`;
@@ -160,6 +164,7 @@ return (
           <label className="block text-sm">Source</label>
           <select name="source" defaultValue={currentSource} className="border rounded px-3 py-2">
             <option value="all">All</option>
+            <option value="affiliate">Affiliate</option>
             <option value="manual">Manual</option>
             <option value="online">Web / Online</option>
             <option value="parlour">Parlour</option>
@@ -225,6 +230,12 @@ return (
                 <td className="py-2 pr-4">
                   {(() => {
                     const src = (o as any).source || 'online';
+                    const isAffiliate = !!(o as any).affiliate_id;
+                    
+                    if (isAffiliate) {
+                      return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Affiliate</span>;
+                    }
+                    
                     const label = src === 'manual' ? 'Manual' : 'Web';
                     const cls =
                       src === 'manual'

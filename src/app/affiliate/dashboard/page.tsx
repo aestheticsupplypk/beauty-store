@@ -20,10 +20,14 @@ type AffiliateSummary = {
   };
   stats: {
     total_orders: number;
+    active_orders?: number;
     total_sales: number;
     total_commission: number;
     pending_commission: number;
     payable_commission: number;
+    paid_commission?: number;
+    void_commission?: number;
+    next_payable_date?: string | null;
   };
   tier: {
     tier_name: string;
@@ -38,7 +42,12 @@ type AffiliateSummary = {
     grand_total: number;
     affiliate_commission_amount: number;
     customer_name?: string | null;
+    city?: string | null;
+    order_status?: string | null;
     delivery_status?: string | null;
+    commission_status?: 'pending' | 'payable' | 'paid' | 'void';
+    payable_at?: string | null;
+    void_reason?: string | null;
   }>;
 };
 
@@ -702,30 +711,52 @@ export default function AffiliateDashboardPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
-            <div className="border rounded p-2 md:p-3 bg-white">
-              <div className="text-[10px] md:text-xs uppercase text-gray-500">Orders</div>
-              <div className="text-lg md:text-xl font-semibold">{data.stats.total_orders}</div>
+            <div className="border rounded p-2 md:p-3 bg-white group relative">
+              <div className="text-[10px] md:text-xs uppercase text-gray-500 flex items-center gap-1">
+                Orders
+                <span className="text-gray-400 cursor-help" title="Total orders placed using your code (includes cancelled/returned)">ⓘ</span>
+              </div>
+              <div className="text-lg md:text-xl font-semibold">
+                {data.stats.total_orders}
+                {(data.stats.void_commission || 0) > 0 && data.stats.active_orders !== undefined && data.stats.active_orders < data.stats.total_orders && (
+                  <span className="text-xs text-gray-400 font-normal ml-1">
+                    ({data.stats.total_orders - data.stats.active_orders} void)
+                  </span>
+                )}
+              </div>
             </div>
             <div className="border rounded p-2 md:p-3 bg-white">
-              <div className="text-[10px] md:text-xs uppercase text-gray-500">Sales</div>
+              <div className="text-[10px] md:text-xs uppercase text-gray-500 flex items-center gap-1">
+                Sales
+                <span className="text-gray-400 cursor-help" title="Total sales from active orders (excludes cancelled/returned)">ⓘ</span>
+              </div>
               <div className="text-lg md:text-xl font-semibold">
                 {Number(data.stats.total_sales || 0).toLocaleString()}
               </div>
             </div>
             <div className="border rounded p-2 md:p-3 bg-white">
-              <div className="text-[10px] md:text-xs uppercase text-gray-500">Earned</div>
+              <div className="text-[10px] md:text-xs uppercase text-gray-500 flex items-center gap-1">
+                Earned
+                <span className="text-gray-400 cursor-help" title="Total commission from active orders (pending + payable + paid)">ⓘ</span>
+              </div>
               <div className="text-lg md:text-xl font-semibold text-emerald-700">
                 {Number(data.stats.total_commission || 0).toLocaleString()}
               </div>
             </div>
             <div className="border rounded p-2 md:p-3 bg-white">
-              <div className="text-[10px] md:text-xs uppercase text-gray-500">Pending</div>
+              <div className="text-[10px] md:text-xs uppercase text-gray-500 flex items-center gap-1">
+                Pending
+                <span className="text-gray-400 cursor-help" title="Commission waiting for 10-day return window to pass">ⓘ</span>
+              </div>
               <div className="text-lg md:text-xl font-semibold text-amber-600">
                 {Number(data.stats.pending_commission || 0).toLocaleString()}
               </div>
             </div>
             <div className="border rounded p-2 md:p-3 bg-white border-emerald-200 bg-emerald-50/30 col-span-2 md:col-span-1">
-              <div className="text-[10px] md:text-xs uppercase text-emerald-700">Payable</div>
+              <div className="text-[10px] md:text-xs uppercase text-emerald-700 flex items-center gap-1">
+                Payable
+                <span className="text-emerald-500 cursor-help" title="Ready for payout - will be included in next month's payment">ⓘ</span>
+              </div>
               <div className="text-lg md:text-xl font-semibold text-emerald-700">
                 {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
               </div>
@@ -748,15 +779,27 @@ export default function AffiliateDashboardPage() {
           </button>
           {showKpiHelp && (
             <div className="text-xs text-gray-600 bg-gray-50 rounded p-3 border space-y-1 -mt-1">
-              <p><strong>Earned:</strong> Total commission from all delivered orders.</p>
+              <p><strong>Orders:</strong> Total orders placed using your code (includes cancelled).</p>
+              <p><strong>Earned:</strong> Total commission from active (non-cancelled) orders.</p>
               <p><strong>Pending:</strong> Commission from recent deliveries (10-day hold for returns).</p>
               <p><strong>Payable:</strong> Ready for payout — included in next month's payment.</p>
+              <p><strong>Void:</strong> Commission removed due to cancelled/returned orders.</p>
             </div>
           )}
 
-          {/* 3️⃣ Next Payout Line (simple, not a card) */}
-          <div className="text-sm text-gray-500">
-            Next payout: ~10th of next month • Estimated: {Number(data.stats.payable_commission || 0).toLocaleString()} PKR
+          {/* 3️⃣ Next Payout Line with next payable date */}
+          <div className="text-sm text-gray-500 space-y-1">
+            <div>Next payout: ~10th of next month • Estimated: {Number(data.stats.payable_commission || 0).toLocaleString()} PKR</div>
+            {data.stats.next_payable_date && (
+              <div className="text-xs text-amber-600">
+                ⏳ Next commission becomes payable: {new Date(data.stats.next_payable_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </div>
+            )}
+            {(data.stats.void_commission || 0) > 0 && (
+              <div className="text-xs text-gray-400">
+                Voided: {Number(data.stats.void_commission || 0).toLocaleString()} PKR (cancelled/returned orders)
+              </div>
+            )}
           </div>
 
           {/* 4️⃣ Status Banner (Collapsed by default) with Tier Badge */}
@@ -880,33 +923,74 @@ export default function AffiliateDashboardPage() {
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {data.orders.slice(0, 3).map((o) => (
-                  <div key={o.id} className="flex items-center justify-between py-2 text-sm">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400 text-xs font-mono">#{String(o.id).slice(-6)}</span>
-                        <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded ${
-                          o.delivery_status === 'delivered' 
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : o.delivery_status === 'failed'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {o.delivery_status || 'Pending'}
+                {data.orders.slice(0, 3).map((o) => {
+                  // Order status badge styling
+                  const orderStatus = o.order_status || o.delivery_status || 'pending';
+                  const orderStatusClass = orderStatus === 'delivered' 
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : orderStatus === 'cancelled' || orderStatus === 'failed'
+                    ? 'bg-red-100 text-red-700'
+                    : orderStatus === 'shipped'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-600';
+                  
+                  // Commission status badge styling (void is neutral gray per senior feedback)
+                  const commissionStatus = o.commission_status || 'pending';
+                  const commissionStatusClass = commissionStatus === 'payable'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : commissionStatus === 'paid'
+                    ? 'bg-green-100 text-green-700'
+                    : commissionStatus === 'void'
+                    ? 'bg-gray-200 text-gray-600'
+                    : 'bg-amber-100 text-amber-700';
+                  
+                  // Format void reason
+                  const voidReasonLabel = o.void_reason === 'cancelled' ? 'Order cancelled'
+                    : o.void_reason === 'returned' ? 'Order returned'
+                    : o.void_reason === 'failed_delivery' ? 'Delivery failed'
+                    : o.void_reason || '';
+
+                  return (
+                    <div key={o.id} className="flex items-center justify-between py-2 text-sm">
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-gray-400 text-xs font-mono">#{String(o.id).slice(-6)}</span>
+                          {/* Order Status */}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${orderStatusClass}`}>
+                            {orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)}
+                          </span>
+                          {/* Commission Status */}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${commissionStatusClass}`}>
+                            {commissionStatus === 'void' ? `Void` : commissionStatus.charAt(0).toUpperCase() + commissionStatus.slice(1)}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500 truncate">
+                          {o.customer_name ? o.customer_name.split(' ')[0] : ''} 
+                          {o.city ? ` • ${o.city}` : ''}
+                          {commissionStatus === 'void' && voidReasonLabel && (
+                            <span className="text-red-400 ml-1">({voidReasonLabel})</span>
+                          )}
+                          {commissionStatus === 'pending' && (
+                            <span className="text-amber-500 ml-1">
+                              {o.payable_at ? (
+                                new Date(o.payable_at) <= new Date() 
+                                  ? '(Ready for payout)'
+                                  : `(Payable ${new Date(o.payable_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
+                              ) : (
+                                '(After delivery)'
+                              )}
+                            </span>
+                          )}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-500 truncate">
-                        {(o as any).customer_name ? (o as any).customer_name.split(' ')[0] : ''} 
-                        {(o as any).city ? ` • ${(o as any).city}` : ''}
-                      </span>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="font-semibold text-sm">
-                        {Number(o.affiliate_commission_amount || 0).toLocaleString()} PKR
+                      <div className="text-right shrink-0">
+                        <div className={`font-semibold text-sm ${commissionStatus === 'void' ? 'text-gray-400 line-through' : ''}`}>
+                          {Number(o.affiliate_commission_amount || 0).toLocaleString()} PKR
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

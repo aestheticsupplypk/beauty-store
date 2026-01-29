@@ -482,7 +482,7 @@ async function updateStatusAction(formData: FormData) {
     return { ok: false, message: 'Missing id or status' } as const;
   }
 
-  const allowed = ['pending', 'packed', 'shipped', 'cancelled'];
+  const allowed = ['pending', 'packed', 'shipped', 'delivered', 'cancelled'];
   if (!allowed.includes(status)) {
     return { ok: false, message: 'Invalid status' } as const;
   }
@@ -510,9 +510,16 @@ async function updateStatusAction(formData: FormData) {
   if (itemsErr) return { ok: false, message: itemsErr.message } as const;
 
   // Update order status first
+  // If status is 'delivered', also set delivered_at and delivery_status
+  const updateData: any = { status };
+  if (status === 'delivered') {
+    updateData.delivered_at = new Date().toISOString();
+    updateData.delivery_status = 'delivered';
+  }
+  
   const { error: updErr } = await supabase
     .from('orders')
-    .update({ status })
+    .update(updateData)
     .eq('id', id);
   if (updErr) return { ok: false, message: updErr.message } as const;
 
@@ -575,6 +582,7 @@ function StatusForm({ id, currentStatus, paymentPreference, amountPaid }: { id: 
           <option value="pending">Pending</option>
           <option value="packed">Packed</option>
           <option value="shipped">Shipped</option>
+          <option value="delivered">Delivered</option>
           <option value="cancelled">Cancelled</option>
         </select>
       </div>

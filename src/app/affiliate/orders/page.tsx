@@ -9,10 +9,13 @@ type Order = {
   id: string;
   order_code: string;
   date: string;
+  order_status: string;
   delivery_status: string;
   order_total: number;
   commission_amount: number;
   commission_status: 'pending' | 'payable' | 'paid' | 'void';
+  payable_at: string | null;
+  void_reason: string | null;
   customer: string;
   paid_in: string | null;
 };
@@ -114,7 +117,7 @@ export default function AffiliateOrdersPage() {
     }
   }
 
-  function getStatusBadge(status: string) {
+  function getStatusBadge(status: string, voidReason?: string | null) {
     switch (status) {
       case 'pending':
         return <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">Pending</span>;
@@ -123,10 +126,37 @@ export default function AffiliateOrdersPage() {
       case 'paid':
         return <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Paid</span>;
       case 'void':
-        return <span className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">Void</span>;
+        // Neutral gray for void (per senior feedback - less attention than order cancelled)
+        const reason = voidReason === 'cancelled' ? 'Cancelled'
+          : voidReason === 'returned' ? 'Returned'
+          : voidReason === 'failed_delivery' ? 'Failed'
+          : 'Void';
+        return <span className="px-2 py-0.5 text-xs rounded bg-gray-200 text-gray-600">{reason}</span>;
       default:
         return <span className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-600">{status}</span>;
     }
+  }
+
+  function getOrderStatusBadge(status: string) {
+    switch (status?.toLowerCase()) {
+      case 'delivered':
+        return <span className="px-2 py-0.5 text-xs rounded bg-emerald-100 text-emerald-700">Delivered</span>;
+      case 'shipped':
+        return <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Shipped</span>;
+      case 'packed':
+        return <span className="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-700">Packed</span>;
+      case 'cancelled':
+        return <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-600">Cancelled</span>;
+      case 'pending':
+      default:
+        return <span className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-600">Pending</span>;
+    }
+  }
+
+  function formatPayableDate(dateStr: string | null) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
   function getDeliveryBadge(status: string) {
@@ -303,19 +333,34 @@ export default function AffiliateOrdersPage() {
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(order.date)}</td>
                         <td className="px-4 py-3 font-mono text-gray-700">{order.order_code}</td>
                         <td className="px-4 py-3 text-gray-700">{order.customer}</td>
-                        <td className="px-4 py-3">{getDeliveryBadge(order.delivery_status)}</td>
+                        <td className="px-4 py-3">{getOrderStatusBadge(order.order_status || order.delivery_status)}</td>
                         <td className="px-4 py-3 text-right text-gray-600">
                           {order.order_total.toLocaleString()} PKR
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">
+                        <td className={`px-4 py-3 text-right font-medium ${order.commission_status === 'void' ? 'text-gray-400 line-through' : ''}`}>
                           {order.commission_amount.toLocaleString()} PKR
                         </td>
-                        <td className="px-4 py-3">{getStatusBadge(order.commission_status)}</td>
+                        <td className="px-4 py-3">{getStatusBadge(order.commission_status, order.void_reason)}</td>
                       </tr>
                       {expandedOrder === order.id && (
                         <tr className="bg-gray-50 border-b">
-                          <td colSpan={7} className="px-4 py-2 text-xs text-gray-600">
+                          <td colSpan={7} className="px-4 py-2 text-xs text-gray-600 space-x-4">
+                            {order.commission_status === 'pending' && (
+                              <span>
+                                <span className="font-medium text-amber-600">Payable:</span>{' '}
+                                {order.payable_at ? (
+                                  new Date(order.payable_at) <= new Date() 
+                                    ? <span className="text-emerald-600 font-medium">Ready for payout</span>
+                                    : formatPayableDate(order.payable_at)
+                                ) : (
+                                  <span className="text-gray-500">After delivery</span>
+                                )}
+                              </span>
+                            )}
                             {order.paid_in && <span><span className="font-medium">Paid in:</span> {order.paid_in}</span>}
+                            {order.commission_status === 'void' && order.void_reason && (
+                              <span><span className="font-medium text-red-600">Reason:</span> {order.void_reason === 'cancelled' ? 'Order cancelled' : order.void_reason === 'returned' ? 'Order returned' : order.void_reason === 'failed_delivery' ? 'Delivery failed' : order.void_reason}</span>
+                            )}
                           </td>
                         </tr>
                       )}
@@ -347,14 +392,33 @@ export default function AffiliateOrdersPage() {
                         <span className="text-xs text-gray-400 ml-2">{formatDate(order.date)}</span>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium text-sm">{order.commission_amount.toLocaleString()}</div>
-                        {getStatusBadge(order.commission_status)}
+                        <div className={`font-medium text-sm ${order.commission_status === 'void' ? 'text-gray-400 line-through' : ''}`}>
+                          {order.commission_amount.toLocaleString()} PKR
+                        </div>
+                        {getStatusBadge(order.commission_status, order.void_reason)}
                       </div>
                     </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      {getOrderStatusBadge(order.order_status || order.delivery_status)}
+                      {order.commission_status === 'pending' && (
+                        <span className="text-xs text-amber-600">
+                          {order.payable_at ? (
+                            new Date(order.payable_at) <= new Date() 
+                              ? 'Ready for payout'
+                              : `Payable ${formatPayableDate(order.payable_at)}`
+                          ) : (
+                            'After delivery'
+                          )}
+                        </span>
+                      )}
+                    </div>
                     {expandedOrder === order.id && (
-                      <div className="mt-2 pt-2 border-t text-xs text-gray-500">
+                      <div className="mt-2 pt-2 border-t text-xs text-gray-500 space-y-1">
                         <p>{order.customer}</p>
-                        <p className="mt-1">Delivery: {getDeliveryBadge(order.delivery_status)} {order.paid_in && `• Paid: ${order.paid_in}`}</p>
+                        {order.paid_in && <p>Paid in: {order.paid_in}</p>}
+                        {order.commission_status === 'void' && order.void_reason && (
+                          <p className="text-red-500">Reason: {order.void_reason === 'cancelled' ? 'Order cancelled' : order.void_reason === 'returned' ? 'Order returned' : order.void_reason === 'failed_delivery' ? 'Delivery failed' : order.void_reason}</p>
+                        )}
                       </div>
                     )}
                   </div>

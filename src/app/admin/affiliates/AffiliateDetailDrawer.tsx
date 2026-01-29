@@ -267,6 +267,26 @@ export default function AffiliateDetailDrawer({ affiliateId, onClose, onStatusCh
           
           {data && (
             <>
+              {/* Inactive Warning Banner */}
+              {!data.active && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-500 text-lg">⚠️</span>
+                    <div>
+                      <p className="text-sm font-medium text-red-800">This affiliate is inactive</p>
+                      <p className="text-xs text-red-600 mt-0.5">
+                        Their referral code is disabled and they cannot access their dashboard.
+                        {data.stats.payable_amount > 0 && (
+                          <span className="block mt-1 font-medium">
+                            Warning: They have {data.stats.payable_amount.toLocaleString()} PKR payable - consider settling before deactivation.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Basic Info */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

@@ -100,6 +100,7 @@ export async function GET(req: Request) {
           city,
           total_amount,
           grand_total,
+          status,
           delivery_status
         )
       `)
@@ -148,6 +149,7 @@ export async function GET(req: Request) {
       
       // Use status directly from affiliate_commissions (source of truth)
       const commissionStatus = c.status as 'pending' | 'payable' | 'paid' | 'void';
+      const orderStatus = (o.status || '').toLowerCase();
 
       // Privacy-safe customer info
       const firstName = getFirstName(o.customer_name);
@@ -162,10 +164,17 @@ export async function GET(req: Request) {
         id: c.order_id,
         order_code: `#${String(c.order_id).slice(-6).toUpperCase()}`,
         date: o.created_at,
+        // Order status (pending/packed/shipped/delivered/cancelled)
+        order_status: orderStatus,
         delivery_status: o.delivery_status || 'pending',
         order_total: Number(o.grand_total || o.total_amount || 0),
         commission_amount: Number(c.commission_amount || 0),
+        // Commission status from affiliate_commissions (source of truth)
         commission_status: commissionStatus,
+        // Payable date (when commission becomes payable after 10-day hold)
+        payable_at: c.payable_at || null,
+        // Void reason (if commission was voided)
+        void_reason: c.void_reason || null,
         customer: customerDisplay,
         paid_in: paidIn,
       };
@@ -272,14 +281,32 @@ async function fallbackToOrdersQuery(
     // Show cancelled status if order is cancelled
     const displayDeliveryStatus = orderStatus === 'cancelled' ? 'cancelled' : (o.delivery_status || 'pending');
 
+    // Calculate payable_at for pending commissions (delivered_at + 10 days)
+    let payableAt: string | null = null;
+    if (commissionStatus === 'pending' && deliveryStatus === 'delivered' && o.delivered_at) {
+      const payableDate = new Date(new Date(o.delivered_at).getTime() + 10 * 24 * 60 * 60 * 1000);
+      payableAt = payableDate.toISOString();
+    }
+
+    // Void reason for cancelled/failed orders
+    let voidReason: string | null = null;
+    if (commissionStatus === 'void') {
+      if (orderStatus === 'cancelled') voidReason = 'cancelled';
+      else if (deliveryStatus === 'failed') voidReason = 'failed_delivery';
+      else if (deliveryStatus === 'returned') voidReason = 'returned';
+    }
+
     return {
       id: o.id,
       order_code: `#${String(o.id).slice(-6).toUpperCase()}`,
       date: o.created_at,
+      order_status: orderStatus,
       delivery_status: displayDeliveryStatus,
       order_total: Number(o.grand_total || o.total_amount || 0),
       commission_amount: Number(o.affiliate_commission_amount || 0),
       commission_status: commissionStatus,
+      payable_at: payableAt,
+      void_reason: voidReason,
       customer: customerDisplay,
       paid_in: null,
     };
