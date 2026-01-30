@@ -419,7 +419,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           </div>
 
           {/* Full Admin Only: Delivered Date Override */}
-          {isFullAdmin && (order.status === 'delivered' || order.delivery_status === 'delivered') && (
+          {isFullAdmin && (order.status === 'delivered' || (order as any).delivery_status === 'delivered') && (
             <DeliveredDateOverrideForm 
               orderId={String(order.id)} 
               currentDeliveredAt={(order as any).delivered_at}
@@ -723,8 +723,8 @@ async function overrideDeliveredDateAction(formData: FormData) {
 function DeliveredDateOverrideForm({ 
   orderId, 
   currentDeliveredAt, 
-  orderCreatedAt, 
-  shippedAt 
+  orderCreatedAt,
+  shippedAt
 }: { 
   orderId: string; 
   currentDeliveredAt: string | null; 
