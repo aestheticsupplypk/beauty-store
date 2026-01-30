@@ -46,7 +46,36 @@ async function fetchOrder(id: string) {
     .eq('order_id', id)
     .order('received_at', { ascending: true });
 
-  return { order, items: lines ?? [], total, subtotal, shipping, amount_paid, amount_due, payments: payments ?? [] } as const;
+  // Fetch commission and check for delivered_date_override event
+  let deliveredDateOverride: { actor: string; created_at: string; reason: string | null } | null = null;
+  if (order.affiliate_id) {
+    const { data: commission } = await supabase
+      .from('affiliate_commissions')
+      .select('id')
+      .eq('order_id', id)
+      .maybeSingle();
+    
+    if (commission) {
+      const { data: overrideEvent } = await supabase
+        .from('commission_events')
+        .select('actor, created_at, metadata')
+        .eq('commission_id', (commission as any).id)
+        .eq('event_type', 'delivered_date_override')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (overrideEvent) {
+        deliveredDateOverride = {
+          actor: (overrideEvent as any).actor,
+          created_at: (overrideEvent as any).created_at,
+          reason: (overrideEvent as any).metadata?.reason || null
+        };
+      }
+    }
+  }
+
+  return { order, items: lines ?? [], total, subtotal, shipping, amount_paid, amount_due, payments: payments ?? [], deliveredDateOverride } as const;
 }
 
 async function addPayment(formData: FormData) {
@@ -222,7 +251,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     );
   }
 
-  const { order, items, total, subtotal, shipping, amount_paid, amount_due, payments } = result as any;
+  const { order, items, total, subtotal, shipping, amount_paid, amount_due, payments, deliveredDateOverride } = result as any;
 
   const paymentStatus: string = (order as any).payment_status || (amount_due > 0 ? (amount_paid > 0 ? 'partial' : 'unpaid') : 'paid');
   const paymentBadge = (status: string) => {
@@ -257,7 +286,17 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             </div>
             <div>
               <div className="text-gray-600">Status</div>
-              <div className="font-medium capitalize">{order.status}</div>
+              <div className="font-medium capitalize flex items-center gap-2">
+                {order.status}
+                {deliveredDateOverride && (
+                  <span 
+                    className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded cursor-help"
+                    title={`Overridden by ${deliveredDateOverride.actor} on ${new Date(deliveredDateOverride.created_at).toLocaleString()}${deliveredDateOverride.reason ? `\nReason: ${deliveredDateOverride.reason}` : ''}`}
+                  >
+                    Date overridden
+                  </span>
+                )}
+              </div>
             </div>
             <div>
               <div className="text-gray-600">Payment</div>
