@@ -8,7 +8,7 @@ async function fetchOrder(id: string) {
   const supabase = getSupabaseServerClient();
   const { data: order, error } = await supabase
     .from('orders')
-    .select('id, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount, source, total_amount, grand_total, amount_paid, amount_due, affiliate_id, affiliate_ref_code, affiliate_commission_amount')
+    .select('id, status, customer_name, email, phone, address, city, province_code, created_at, shipped_at, delivered_at, delivery_status, shipping_amount, source, total_amount, grand_total, amount_paid, amount_due, affiliate_id, affiliate_ref_code, affiliate_commission_amount')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -207,7 +207,8 @@ async function returnLineAction(formData: FormData) {
 }
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
-  await requireSectionAccess('orders');
+  const { profile } = await requireSectionAccess('orders');
+  const isFullAdmin = Boolean((profile as any)?.is_admin_full);
   const id = params.id;
   const result = await fetchOrder(id);
 
@@ -417,6 +418,16 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             </div>
           </div>
 
+          {/* Full Admin Only: Delivered Date Override */}
+          {isFullAdmin && (order.status === 'delivered' || order.delivery_status === 'delivered') && (
+            <DeliveredDateOverrideForm 
+              orderId={String(order.id)} 
+              currentDeliveredAt={(order as any).delivered_at}
+              orderCreatedAt={order.created_at}
+              shippedAt={(order as any).shipped_at}
+            />
+          )}
+
           <div className="border rounded p-4 space-y-3">
             <h2 className="font-medium">Payments</h2>
             <div className="text-sm text-gray-700 space-y-1">
@@ -593,5 +604,198 @@ function StatusForm({ id, currentStatus, paymentPreference, amountPaid }: { id: 
       )}
       <button className="bg-black text-white rounded px-4 py-2">Save</button>
     </form>
+  );
+}
+
+// ============================================================================
+// FULL ADMIN ONLY: Delivered Date Override
+// ============================================================================
+
+async function overrideDeliveredDateAction(formData: FormData) {
+  'use server';
+  const orderId = String(formData.get('order_id') || '');
+  const newDeliveredAt = String(formData.get('delivered_at') || '');
+  const reason = String(formData.get('reason') || '').trim();
+  
+  // Server-side permission check - MUST be full admin
+  const { getSessionAndProfile } = await import('@/lib/auth');
+  const { session, profile } = await getSessionAndProfile();
+  
+  if (!session || !profile || !(profile as any).is_admin_full) {
+    return { ok: false, message: 'Permission denied. Full Admin required.' } as const;
+  }
+  
+  if (!orderId || !newDeliveredAt) {
+    return { ok: false, message: 'Missing order ID or delivered date' } as const;
+  }
+  
+  const supabase = getSupabaseServerClient();
+  
+  // Fetch current order data for validation
+  const { data: order, error: fetchErr } = await supabase
+    .from('orders')
+    .select('id, created_at, shipped_at, delivered_at, status, delivery_status')
+    .eq('id', orderId)
+    .maybeSingle();
+  
+  if (fetchErr || !order) {
+    return { ok: false, message: 'Order not found' } as const;
+  }
+  
+  const newDate = new Date(newDeliveredAt);
+  const orderCreatedAt = new Date((order as any).created_at);
+  const shippedAt = (order as any).shipped_at ? new Date((order as any).shipped_at) : null;
+  const now = new Date();
+  const oldDeliveredAt = (order as any).delivered_at;
+  
+  // Guardrails (server-enforced)
+  // 1. delivered_at >= orders.created_at
+  if (newDate < orderCreatedAt) {
+    return { ok: false, message: 'Delivered date cannot be before order creation date' } as const;
+  }
+  
+  // 2. delivered_at >= shipped_at (if exists)
+  if (shippedAt && newDate < shippedAt) {
+    return { ok: false, message: 'Delivered date cannot be before shipped date' } as const;
+  }
+  
+  // 3. delivered_at <= NOW()
+  if (newDate > now) {
+    return { ok: false, message: 'Delivered date cannot be in the future' } as const;
+  }
+  
+  // 4. If this makes commission instantly payable, require reason
+  const newPayableAt = new Date(newDate.getTime() + 10 * 24 * 60 * 60 * 1000); // +10 days
+  if (newPayableAt <= now && !reason) {
+    return { ok: false, message: 'Reason required when setting a date that makes commission immediately payable' } as const;
+  }
+  
+  // Update the order
+  const { error: updateErr } = await supabase
+    .from('orders')
+    .update({
+      delivered_at: newDate.toISOString(),
+      delivery_status: 'delivered',
+      status: 'delivered',
+    })
+    .eq('id', orderId);
+  
+  if (updateErr) {
+    return { ok: false, message: updateErr.message } as const;
+  }
+  
+  // Update commission payable_at
+  const { error: commErr } = await supabase
+    .from('affiliate_commissions')
+    .update({
+      payable_at: newPayableAt.toISOString(),
+    })
+    .eq('order_id', orderId)
+    .in('status', ['pending', 'payable']); // Don't touch paid/void
+  
+  // Log to commission_events for audit trail
+  const { data: commission } = await supabase
+    .from('affiliate_commissions')
+    .select('id')
+    .eq('order_id', orderId)
+    .maybeSingle();
+  
+  if (commission) {
+    await supabase.from('commission_events').insert({
+      commission_id: (commission as any).id,
+      event_type: 'delivered_date_override',
+      metadata: {
+        old_delivered_at: oldDeliveredAt,
+        new_delivered_at: newDate.toISOString(),
+        new_payable_at: newPayableAt.toISOString(),
+        reason: reason || null,
+        source: 'admin_override',
+        instantly_payable: newPayableAt <= now,
+      },
+      actor: session.user.email || session.user.id,
+    });
+  }
+  
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true, message: 'Delivered date updated successfully' } as const;
+}
+
+function DeliveredDateOverrideForm({ 
+  orderId, 
+  currentDeliveredAt, 
+  orderCreatedAt, 
+  shippedAt 
+}: { 
+  orderId: string; 
+  currentDeliveredAt: string | null; 
+  orderCreatedAt: string;
+  shippedAt: string | null;
+}) {
+  const minDate = shippedAt || orderCreatedAt;
+  const currentValue = currentDeliveredAt 
+    ? new Date(currentDeliveredAt).toISOString().slice(0, 16) 
+    : '';
+  
+  // Calculate if current date makes commission instantly payable
+  const now = new Date();
+  const currentPayableAt = currentDeliveredAt 
+    ? new Date(new Date(currentDeliveredAt).getTime() + 10 * 24 * 60 * 60 * 1000)
+    : null;
+  const isCurrentlyPayable = currentPayableAt && currentPayableAt <= now;
+  
+  return (
+    <div className="border border-amber-200 bg-amber-50 rounded p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <h3 className="font-medium text-amber-800">Set Delivered Date (Admin)</h3>
+        <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded">Full Admin Only</span>
+      </div>
+      
+      <p className="text-xs text-amber-700">
+        Override the delivery date for this order. This will recalculate the commission payable date (delivered + 10 days).
+      </p>
+      
+      {currentDeliveredAt && (
+        <div className="text-xs text-gray-600">
+          <span className="font-medium">Current:</span> {new Date(currentDeliveredAt).toLocaleString()}
+          {isCurrentlyPayable && <span className="ml-2 text-emerald-600">(Commission payable)</span>}
+          {!isCurrentlyPayable && currentPayableAt && (
+            <span className="ml-2 text-amber-600">(Payable: {currentPayableAt.toLocaleDateString()})</span>
+          )}
+        </div>
+      )}
+      
+      <form action={overrideDeliveredDateAction} className="space-y-3">
+        <input type="hidden" name="order_id" value={orderId} />
+        
+        <div>
+          <label className="block text-sm text-gray-700">New Delivered Date</label>
+          <input 
+            type="datetime-local" 
+            name="delivered_at" 
+            defaultValue={currentValue}
+            min={new Date(minDate).toISOString().slice(0, 16)}
+            max={new Date().toISOString().slice(0, 16)}
+            className="border rounded px-3 py-2 w-full text-sm"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm text-gray-700">
+            Reason <span className="text-gray-400">(required if making commission instantly payable)</span>
+          </label>
+          <input 
+            type="text" 
+            name="reason" 
+            placeholder="e.g., Courier confirmed delivery on this date"
+            className="border rounded px-3 py-2 w-full text-sm"
+          />
+        </div>
+        
+        <button className="bg-amber-600 hover:bg-amber-700 text-white rounded px-4 py-2 text-sm">
+          Update Delivered Date
+        </button>
+      </form>
+    </div>
   );
 }
