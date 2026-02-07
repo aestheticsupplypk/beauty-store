@@ -33,6 +33,10 @@ type Affiliate = {
     in_batch_count: number;
     paid_amount: number;
     paid_count: number;
+    // Adjustments
+    adjustment_amount: number;
+    adjustment_count: number;
+    net_payable: number;
     // Legacy
     payable_amount: number;
     void_count: number;
@@ -322,9 +326,10 @@ export default function AffiliatesClient() {
                 <th className="py-2 px-3 text-right">Void Rate</th>
                 <th className="py-2 px-3 text-right">Sales (PKR)</th>
                 <th className="py-2 px-3 text-right">Commission</th>
-                <th className="py-2 px-3 text-right">Pending</th>
-                <th className="py-2 px-3 text-right">Payable</th>
-                <th className="py-2 px-3 text-right">In Batch</th>
+                <th className="py-2 px-3 text-right" title="Commissions still in return window (not yet eligible)">Pending</th>
+                <th className="py-2 px-3 text-right" title="Ready for payout, not yet batched">Payable Now</th>
+                <th className="py-2 px-3 text-right" title="Unpaid adjustments (bonuses/clawbacks)">Adj.</th>
+                <th className="py-2 px-3 text-right" title="Queued in pending payout batch">In Batch</th>
                 <th className="py-2 px-3">Last Order</th>
                 <th className="py-2 px-3">Payout Ready</th>
               </tr>
@@ -332,7 +337,7 @@ export default function AffiliatesClient() {
             <tbody>
               {sortedAffiliates.length === 0 ? (
                 <tr>
-                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={16}>
+                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={17}>
                     {hasActiveFilters ? 'No affiliates match your filters.' : 'No affiliates created yet.'}
                   </td>
                 </tr>
@@ -401,10 +406,31 @@ export default function AffiliatesClient() {
                       )}
                     </td>
                     <td className="py-2 px-3 text-right">
-                      {(a.stats.in_batch_amount || 0) > 0 ? (
-                        <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700" title={`${a.stats.in_batch_count || 0} commission(s) queued in pending batch`}>
-                          {a.stats.in_batch_amount.toLocaleString()}
+                      {(a.stats.adjustment_amount || 0) !== 0 ? (
+                        <span 
+                          className={`px-2 py-0.5 text-xs rounded ${
+                            a.stats.adjustment_amount > 0 
+                              ? 'bg-emerald-100 text-emerald-700' 
+                              : 'bg-red-100 text-red-700'
+                          }`}
+                          title={`${a.stats.adjustment_count || 0} adjustment(s)`}
+                        >
+                          {a.stats.adjustment_amount > 0 ? '+' : ''}{a.stats.adjustment_amount.toLocaleString()}
                         </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {(a.stats.in_batch_amount || 0) > 0 ? (
+                        <a 
+                          href="/admin/affiliates/payouts"
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors" 
+                          title={`${a.stats.in_batch_count || 0} commission(s) queued in pending batch — Click to view`}
+                        >
+                          {a.stats.in_batch_amount.toLocaleString()}
+                        </a>
                       ) : (
                         <span className="text-gray-300">—</span>
                       )}

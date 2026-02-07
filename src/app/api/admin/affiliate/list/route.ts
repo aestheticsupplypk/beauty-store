@@ -109,6 +109,33 @@ export async function GET(request: NextRequest) {
       console.error('[admin/affiliate/list] commissions query error', commissionErr.message);
     }
 
+    // ============================================================================
+    // COMMISSION ADJUSTMENTS:
+    // Fetch unpaid adjustments per affiliate (can be negative for clawbacks)
+    // ============================================================================
+    const { data: adjustmentsData, error: adjErr } = await supabase
+      .from('commission_adjustments')
+      .select('affiliate_id, amount')
+      .in('affiliate_id', ids)
+      .is('payout_batch_id', null)
+      .is('paid_at', null);
+    
+    if (adjErr) {
+      console.error('[admin/affiliate/list] adjustments query error', adjErr.message);
+    }
+
+    // Build adjustments map per affiliate
+    const adjustmentsByAffiliate: Record<string, { amount: number; count: number }> = {};
+    for (const adj of (adjustmentsData || []) as any[]) {
+      const aid = String(adj.affiliate_id || '');
+      if (!aid) continue;
+      if (!adjustmentsByAffiliate[aid]) {
+        adjustmentsByAffiliate[aid] = { amount: 0, count: 0 };
+      }
+      adjustmentsByAffiliate[aid].amount += Number(adj.amount || 0);
+      adjustmentsByAffiliate[aid].count += 1;
+    }
+
     // Fetch commissions from last 30 days for void rate calculation
     const thirtyDaysAgoForVoid = new Date();
     thirtyDaysAgoForVoid.setDate(thirtyDaysAgoForVoid.getDate() - 30);
@@ -148,6 +175,9 @@ export async function GET(request: NextRequest) {
       in_batch_count: number;
       paid_amount: number;
       paid_count: number;
+      // Adjustments
+      adjustment_amount: number;
+      adjustment_count: number;
       // Legacy (for void rate)
       void_count: number;
       commission_count: number;
@@ -170,6 +200,8 @@ export async function GET(request: NextRequest) {
       in_batch_count: 0,
       paid_amount: 0,
       paid_count: 0,
+      adjustment_amount: 0,
+      adjustment_count: 0,
       void_count: 0,
       commission_count: 0,
     });
@@ -281,6 +313,11 @@ export async function GET(request: NextRequest) {
     let enrichedAffiliates = (affiliates || []).map((a: any) => {
       const stats = statsById[a.id] || defaultStats();
       
+      // Add adjustments from the adjustments map
+      const adjustments = adjustmentsByAffiliate[a.id] || { amount: 0, count: 0 };
+      stats.adjustment_amount = adjustments.amount;
+      stats.adjustment_count = adjustments.count;
+      
       // Calculate void rate (percentage of voided commissions)
       const voidRate = stats.commission_count > 0 
         ? Math.round((stats.void_count / stats.commission_count) * 100) 
@@ -334,6 +371,11 @@ export async function GET(request: NextRequest) {
           in_batch_count: stats.in_batch_count,
           paid_amount: stats.paid_amount,
           paid_count: stats.paid_count,
+          // Adjustments (Phase 2)
+          adjustment_amount: stats.adjustment_amount,
+          adjustment_count: stats.adjustment_count,
+          // Net payable = payable_now + adjustments
+          net_payable: stats.payable_now_amount + stats.adjustment_amount,
           // Legacy (backward compat)
           payable_amount: stats.payable_now_amount, // Alias for backward compat
           void_count: stats.void_count,

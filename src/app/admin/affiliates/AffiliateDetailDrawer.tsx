@@ -35,9 +35,18 @@ type AffiliateDetail = {
     total_orders: number;
     total_sales: number;
     total_commission: number;
-    payable_amount: number;
     pending_amount: number;
+    payable_now_amount: number;
+    in_batch_amount: number;
+    paid_amount: number;
+    payable_amount: number; // Legacy alias
   };
+  pending_batches: {
+    id: string;
+    batch_date: string;
+    status: string;
+    amount: number;
+  }[];
   recent_orders: Order[];
 };
 
@@ -315,7 +324,7 @@ export default function AffiliateDetailDrawer({ affiliateId, onClose, onStatusCh
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="border rounded p-3 bg-gray-50">
                   <div className="text-xs text-gray-500 uppercase">Orders</div>
                   <div className="text-lg font-semibold">{data.stats.total_orders}</div>
@@ -324,15 +333,43 @@ export default function AffiliateDetailDrawer({ affiliateId, onClose, onStatusCh
                   <div className="text-xs text-gray-500 uppercase">Sales</div>
                   <div className="text-lg font-semibold">{data.stats.total_sales.toLocaleString()}</div>
                 </div>
-                <div className="border rounded p-3 bg-gray-50">
+                <div className="border rounded p-3 bg-amber-50 border-amber-200">
                   <div className="text-xs text-amber-600 uppercase">Pending</div>
-                  <div className="text-lg font-semibold text-amber-600">{data.stats.pending_amount.toLocaleString()}</div>
+                  <div className="text-lg font-semibold text-amber-600">{(data.stats.pending_amount || 0).toLocaleString()}</div>
                 </div>
                 <div className="border rounded p-3 bg-emerald-50 border-emerald-200">
                   <div className="text-xs text-emerald-600 uppercase">Payable</div>
-                  <div className="text-lg font-semibold text-emerald-600">{data.stats.payable_amount.toLocaleString()}</div>
+                  <div className="text-lg font-semibold text-emerald-600">{(data.stats.payable_now_amount || 0).toLocaleString()}</div>
+                </div>
+                <div className="border rounded p-3 bg-blue-50 border-blue-200">
+                  <div className="text-xs text-blue-600 uppercase">In Batch</div>
+                  <div className="text-lg font-semibold text-blue-600">{(data.stats.in_batch_amount || 0).toLocaleString()}</div>
                 </div>
               </div>
+
+              {/* Pending Batches */}
+              {data.pending_batches && data.pending_batches.length > 0 && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-blue-50 border-b border-blue-200">
+                    <h4 className="font-medium text-blue-800">Queued in Payout Batches</h4>
+                  </div>
+                  <div className="divide-y">
+                    {data.pending_batches.map((batch) => (
+                      <div key={batch.id} className="px-4 py-3 flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-medium">Batch: {batch.batch_date}</div>
+                          <div className="text-xs text-gray-500">
+                            Status: <span className={batch.status === 'pending' ? 'text-amber-600' : 'text-gray-600'}>{batch.status}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-blue-600">{batch.amount.toLocaleString()} PKR</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Payout Method */}
               <div className="border rounded-lg p-4 space-y-3">
