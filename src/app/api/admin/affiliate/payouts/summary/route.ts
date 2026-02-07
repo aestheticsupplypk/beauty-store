@@ -7,11 +7,16 @@ export async function GET() {
   try {
     const supabase = getSupabaseServerClient();
 
-    // Get total payable amount (status='payable' and not yet in a batch)
+    // ============================================================================
+    // CANONICAL ELIGIBILITY RULE:
+    // A commission is payout-eligible when:
+    //   status = 'payable' OR (status = 'pending' AND payable_at <= now())
+    // Exclude: paid, void, already in a batch
+    // ============================================================================
     const { data: payableData, error: payableErr } = await supabase
       .from('affiliate_commissions')
-      .select('commission_amount, affiliate_id')
-      .eq('status', 'payable')
+      .select('commission_amount, affiliate_id, status, payable_at')
+      .in('status', ['pending', 'payable'])
       .is('payout_batch_id', null);
 
     if (payableErr) {
@@ -19,9 +24,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to load payable data' }, { status: 500 });
     }
 
-    const payableRows = (payableData || []) as any[];
-    const totalPayable = payableRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0);
-    const uniqueAffiliates = new Set(payableRows.map(r => r.affiliate_id));
+    const now = new Date();
+    
+    // Apply canonical eligibility rule
+    const eligibleRows = ((payableData || []) as any[]).filter(r => {
+      if (r.status === 'payable') return true;
+      if (r.status === 'pending' && r.payable_at && new Date(r.payable_at) <= now) return true;
+      return false;
+    });
+    
+    const totalPayable = eligibleRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    const uniqueAffiliates = new Set(eligibleRows.map(r => r.affiliate_id));
     const affiliatesPayable = uniqueAffiliates.size;
 
     // Get last completed batch
@@ -49,7 +62,6 @@ export async function GET() {
     }
 
     // Calculate next payout date (10th of current or next month)
-    const now = new Date();
     let nextPayoutDate: Date;
     if (now.getDate() < 10) {
       nextPayoutDate = new Date(now.getFullYear(), now.getMonth(), 10);

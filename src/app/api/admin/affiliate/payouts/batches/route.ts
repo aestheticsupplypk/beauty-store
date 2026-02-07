@@ -49,14 +49,19 @@ export async function POST(req: Request) {
     const notes = String(body?.notes || '').trim() || null;
     const batchDate = body?.batch_date ? new Date(body.batch_date) : new Date();
 
-    // Start transaction by getting payable commissions with lock
-    // Note: Supabase doesn't support FOR UPDATE directly, so we use a two-step approach
+    // ============================================================================
+    // CANONICAL ELIGIBILITY RULE:
+    // A commission is payout-eligible when:
+    //   status = 'payable' OR (status = 'pending' AND payable_at <= now())
+    // Exclude: paid, void, already in a batch
+    // At batch creation, we freeze the set and optionally promote pending->payable
+    // ============================================================================
     
-    // Step 1: Get all payable commissions not yet in a batch
+    // Step 1: Get all eligible commissions not yet in a batch
     const { data: payableCommissions, error: fetchErr } = await supabase
       .from('affiliate_commissions')
-      .select('id, affiliate_id, commission_amount, payable_at')
-      .eq('status', 'payable')
+      .select('id, affiliate_id, commission_amount, status, payable_at')
+      .in('status', ['pending', 'payable'])
       .is('payout_batch_id', null);
 
     if (fetchErr) {
@@ -64,7 +69,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to fetch payable commissions' }, { status: 500 });
     }
 
-    const commissions = (payableCommissions || []) as any[];
+    const now = new Date();
+    
+    // Apply canonical eligibility rule
+    const commissions = ((payableCommissions || []) as any[]).filter(r => {
+      if (r.status === 'payable') return true;
+      if (r.status === 'pending' && r.payable_at && new Date(r.payable_at) <= now) return true;
+      return false;
+    });
 
     if (commissions.length === 0) {
       return NextResponse.json({ error: 'No payable commissions found' }, { status: 400 });
@@ -106,14 +118,17 @@ export async function POST(req: Request) {
 
     const batchId = (batch as any).id;
 
-    // Step 3: Assign all payable commissions to this batch
+    // Step 3: Assign all eligible commissions to this batch and promote to 'payable'
+    // This freezes the set at batch creation time (accounting safety)
     const commissionIds = commissions.map(c => c.id);
     
     const { error: updateErr } = await supabase
       .from('affiliate_commissions')
-      .update({ payout_batch_id: batchId })
+      .update({ 
+        payout_batch_id: batchId,
+        status: 'payable' // Promote pending->payable at batch time
+      })
       .in('id', commissionIds)
-      .eq('status', 'payable')
       .is('payout_batch_id', null); // Safety check
 
     if (updateErr) {

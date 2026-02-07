@@ -7,7 +7,12 @@ export async function GET() {
   try {
     const supabase = getSupabaseServerClient();
 
-    // Get all payable commissions not yet assigned to a batch
+    // ============================================================================
+    // CANONICAL ELIGIBILITY RULE:
+    // A commission is payout-eligible when:
+    //   status = 'payable' OR (status = 'pending' AND payable_at <= now())
+    // Exclude: paid, void, already in a batch
+    // ============================================================================
     const { data: commissions, error: commErr } = await supabase
       .from('affiliate_commissions')
       .select(`
@@ -15,6 +20,7 @@ export async function GET() {
         affiliate_id,
         order_id,
         commission_amount,
+        status,
         payable_at,
         created_at,
         affiliates!inner (
@@ -28,7 +34,7 @@ export async function GET() {
           bank_account_number
         )
       `)
-      .eq('status', 'payable')
+      .in('status', ['pending', 'payable'])
       .is('payout_batch_id', null)
       .order('affiliate_id')
       .order('payable_at', { ascending: true });
@@ -38,7 +44,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to load candidates' }, { status: 500 });
     }
 
-    const rows = (commissions || []) as any[];
+    const now = new Date();
+    
+    // Apply canonical eligibility rule
+    const rows = ((commissions || []) as any[]).filter(r => {
+      if (r.status === 'payable') return true;
+      if (r.status === 'pending' && r.payable_at && new Date(r.payable_at) <= now) return true;
+      return false;
+    });
 
     // Group by affiliate
     const affiliateMap = new Map<string, {
