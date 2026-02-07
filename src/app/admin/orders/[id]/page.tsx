@@ -272,6 +272,35 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold">Order #{order.order_code || order.id}</h1>
+          {/* Source Badge - Canonical Logic */}
+          {(() => {
+            const src = String(order.source || 'website').toLowerCase();
+            const affiliateId = order.affiliate_id;
+            
+            // Canonical: Parlour > Manual > (Website+Affiliate=Affiliate) > Web
+            let label: string;
+            let colors: string;
+            
+            if (src === 'parlour') {
+              label = 'Parlour';
+              colors = 'bg-orange-100 text-orange-800 border-orange-300';
+            } else if (src === 'manual') {
+              label = 'Manual';
+              colors = 'bg-purple-100 text-purple-800 border-purple-300';
+            } else if (affiliateId) {
+              label = 'Affiliate';
+              colors = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+            } else {
+              label = 'Website';
+              colors = 'bg-blue-100 text-blue-800 border-blue-300';
+            }
+            
+            return (
+              <span className={`inline-flex items-center rounded-md border px-3 py-1 text-sm font-bold ${colors}`}>
+                {label}
+              </span>
+            );
+          })()}
           {paymentBadge(paymentStatus)}
         </div>
         <Link className="underline" href="/admin/orders">Back to Orders</Link>

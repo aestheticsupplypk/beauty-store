@@ -4,32 +4,105 @@ import Link from 'next/link';
 
 type Search = { q?: string; status?: string; productId?: string; payment?: string; source?: string; returns?: string };
 
+// ============================================================================
+// Canonical Source Badge Logic
+// This must match the filter semantics exactly
+// ============================================================================
+type SourceBadge = 'Web' | 'Affiliate' | 'Parlour' | 'Manual';
+
+function getSourceBadge(source: string | null, affiliateId: string | null): SourceBadge {
+  const src = (source || 'website').toLowerCase();
+  
+  if (src === 'parlour') return 'Parlour';
+  if (src === 'manual') return 'Manual';
+  // Website with affiliate = Affiliate, without = Web
+  if (affiliateId) return 'Affiliate';
+  return 'Web';
+}
+
+function getSourceBadgeStyle(badge: SourceBadge): string {
+  switch (badge) {
+    case 'Parlour':
+      return 'bg-orange-100 text-orange-700';
+    case 'Affiliate':
+      return 'bg-emerald-100 text-emerald-700';
+    case 'Manual':
+      return 'bg-purple-100 text-purple-700';
+    case 'Web':
+    default:
+      return 'bg-blue-100 text-blue-700';
+  }
+}
+
 async function fetchOrders(search: Search) {
   const supabase = getSupabaseServerClient();
+  
+  // ============================================================================
+  // STEP 1: Build order IDs list with server-side filters for payment/returns
+  // This fixes the LIMIT 50 + client-side filter correctness bug
+  // ============================================================================
+  
+  // First, get order IDs that match returns filter (if applicable)
+  let returnFilterOrderIds: string[] | null = null;
+  if (search.returns === 'with' || search.returns === 'without') {
+    const { data: linesWithReturns } = await supabase
+      .from('order_lines')
+      .select('order_id')
+      .gt('returned_qty', 0)
+      .neq('return_status', 'none');
+    
+    const orderIdsWithReturns = new Set((linesWithReturns ?? []).map((l: any) => l.order_id));
+    
+    if (search.returns === 'with') {
+      returnFilterOrderIds = Array.from(orderIdsWithReturns);
+      if (returnFilterOrderIds.length === 0) return [] as any[];
+    } else {
+      // 'without' - we'll exclude these IDs later
+      returnFilterOrderIds = Array.from(orderIdsWithReturns);
+    }
+  }
+  
+  // Build main query
   let query = supabase
     .from('orders')
     .select(
       'id, order_code, source, status, customer_name, email, phone, address, city, province_code, created_at, shipping_amount, grand_total, amount_paid, amount_due, affiliate_id'
     )
-    .order('created_at', { ascending: false })
-    .limit(50);
+    .order('created_at', { ascending: false });
 
+  // Status filter (server-side)
   if (search.status && search.status !== 'all') {
     query = query.eq('status', search.status);
   }
+  
+  // Source filter (server-side) - canonical logic
   if (search.source && search.source !== 'all') {
     if (search.source === 'affiliate') {
-      query = query.not('affiliate_id', 'is', null);
+      // Affiliate = source='website' AND affiliate_id IS NOT NULL
+      query = query.eq('source', 'website').not('affiliate_id', 'is', null);
+    } else if (search.source === 'online' || search.source === 'web') {
+      // Web = source='website' AND affiliate_id IS NULL
+      query = query.eq('source', 'website').is('affiliate_id', null);
     } else {
+      // Parlour or Manual - direct source match
       query = query.eq('source', search.source);
     }
   }
+  
+  // Payment filter (server-side)
+  if (search.payment === 'pending') {
+    query = query.gt('amount_due', 0);
+  } else if (search.payment === 'paid') {
+    query = query.lte('amount_due', 0).gt('grand_total', 0);
+  }
+  
+  // Search filter
   if (search.q && search.q.trim()) {
     const q = `%${search.q.trim()}%`;
-    // Search by name, email or phone
     query = query.or(`customer_name.ilike.${q},email.ilike.${q},phone.ilike.${q}`);
   }
-  // Filter by product via order_lines -> variants.product_id
+  
+  // Product filter
   if (search.productId && search.productId !== 'all') {
     const { data: lineOrders, error: lineErr } = await supabase
       .from('order_lines')
@@ -37,18 +110,36 @@ async function fetchOrders(search: Search) {
       .eq('variants.product_id', search.productId);
     if (lineErr) throw lineErr;
     const orderIds = Array.from(new Set((lineOrders ?? []).map((r: any) => r.order_id)));
-    if (orderIds.length === 0) {
-      return [] as any[];
-    }
+    if (orderIds.length === 0) return [] as any[];
     query = query.in('id', orderIds);
   }
+  
+  // Returns filter (server-side)
+  if (search.returns === 'with' && returnFilterOrderIds) {
+    query = query.in('id', returnFilterOrderIds);
+  } else if (search.returns === 'without' && returnFilterOrderIds && returnFilterOrderIds.length > 0) {
+    // Supabase doesn't have NOT IN, so we filter after fetch for 'without'
+    // But we still apply LIMIT after, which is better than before
+  }
+  
+  // Apply limit AFTER all server-side filters
+  query = query.limit(100);
+  
   const { data, error } = await query;
   if (error) throw error;
 
-  const ids = (data ?? []).map((o) => o.id);
+  let filteredData = data ?? [];
+  
+  // Handle 'without returns' exclusion (Supabase lacks NOT IN)
+  if (search.returns === 'without' && returnFilterOrderIds && returnFilterOrderIds.length > 0) {
+    const excludeSet = new Set(returnFilterOrderIds);
+    filteredData = filteredData.filter((o: any) => !excludeSet.has(o.id));
+  }
+
+  const ids = filteredData.map((o) => o.id);
   if (ids.length === 0) return [] as any[];
 
-  // Fetch totals per order from order_lines (preferred: sum of line_total)
+  // Fetch totals per order from order_lines
   const { data: lines } = await supabase
     .from('order_lines')
     .select('order_id, line_total, returned_qty, return_status')
@@ -65,7 +156,8 @@ async function fetchOrders(search: Search) {
       hasReturnsMap[key] = true;
     }
   }
-  let result = (data ?? []).map((o) => {
+  
+  const result = filteredData.map((o) => {
     const idKey = String(o.id);
     const shipping = Number((o as any).shipping_amount || 0);
     const grandTotal = Number((o as any).grand_total || 0);
@@ -79,22 +171,9 @@ async function fetchOrders(search: Search) {
       amount_paid: amountPaid,
       amount_due: amountDue,
       has_returns: !!hasReturnsMap[idKey],
+      source_badge: getSourceBadge(o.source, o.affiliate_id),
     };
   });
-
-  // Apply payment filter in-memory based on amount_due
-  if (search.payment === 'pending') {
-    result = result.filter((o: any) => Number(o.amount_due || 0) > 0);
-  } else if (search.payment === 'paid') {
-    result = result.filter((o: any) => Number(o.amount_due || 0) <= 0 && Number(o.total || 0) > 0);
-  }
-
-  // Filter by returns
-  if (search.returns === 'with') {
-    result = result.filter((o: any) => !!(o as any).has_returns);
-  } else if (search.returns === 'without') {
-    result = result.filter((o: any) => !(o as any).has_returns);
-  }
 
   return result;
 }
@@ -229,26 +308,9 @@ return (
                 <td className="py-2 pr-4">{o.phone}</td>
                 <td className="py-2 pr-4">{o.city} {o.province_code ? `(${o.province_code})` : ''}</td>
                 <td className="py-2 pr-4">
-                  {(() => {
-                    const src = (o as any).source || 'online';
-                    const isAffiliate = !!(o as any).affiliate_id;
-                    const isParlour = src === 'parlour';
-                    
-                    if (isParlour) {
-                      return <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Parlour</span>;
-                    }
-                    
-                    if (isAffiliate) {
-                      return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Affiliate</span>;
-                    }
-                    
-                    const label = src === 'manual' ? 'Manual' : 'Web';
-                    const cls =
-                      src === 'manual'
-                        ? 'inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700'
-                        : 'inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700';
-                    return <span className={cls}>{label}</span>;
-                  })()}
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getSourceBadgeStyle(o.source_badge)}`}>
+                    {o.source_badge}
+                  </span>
                 </td>
                 <td className="py-2 pr-4">
                   {(() => {
