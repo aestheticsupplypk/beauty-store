@@ -71,15 +71,42 @@ export async function GET(request: NextRequest) {
       console.error('[admin/affiliate/list] orders query error', ordErr.message);
     }
 
-    // Fetch payable commissions
-    const { data: payableCommissions, error: payErr } = await supabase
+    // ============================================================================
+    // COMMISSION STATUS BREAKDOWN:
+    // Fetch all commissions to calculate: pending, payable_now, in_batch, paid
+    // Using canonical eligibility rule: status='payable' OR (status='pending' AND payable_at <= NOW())
+    // ============================================================================
+    const { data: allAffiliateCommissions, error: commissionErr } = await supabase
       .from('affiliate_commissions')
-      .select('affiliate_id, commission_amount')
-      .in('affiliate_id', ids)
-      .eq('status', 'payable')
-      .is('payout_batch_id', null);
-    if (payErr) {
-      console.error('[admin/affiliate/list] payable query error', payErr.message);
+      .select(`
+        affiliate_id,
+        commission_amount,
+        status,
+        payable_at,
+        payout_batch_id
+      `)
+      .in('affiliate_id', ids);
+    
+    // Fetch batch statuses separately for commissions that have a batch
+    const batchIds = Array.from(new Set(
+      ((allAffiliateCommissions || []) as any[])
+        .map(c => c.payout_batch_id)
+        .filter(Boolean)
+    ));
+    
+    let batchStatusMap: Record<string, string> = {};
+    if (batchIds.length > 0) {
+      const { data: batches } = await supabase
+        .from('affiliate_payout_batches')
+        .select('id, status')
+        .in('id', batchIds);
+      
+      for (const b of (batches || []) as any[]) {
+        batchStatusMap[b.id] = b.status;
+      }
+    }
+    if (commissionErr) {
+      console.error('[admin/affiliate/list] commissions query error', commissionErr.message);
     }
 
     // Fetch commissions from last 30 days for void rate calculation
@@ -112,7 +139,16 @@ export async function GET(request: NextRequest) {
       total_commission: number;
       last_order_date: string | null;
       delivered_count_30d: number;
-      payable_amount: number;
+      // Commission breakdown
+      pending_amount: number;
+      pending_count: number;
+      payable_now_amount: number;
+      payable_now_count: number;
+      in_batch_amount: number;
+      in_batch_count: number;
+      paid_amount: number;
+      paid_count: number;
+      // Legacy (for void rate)
       void_count: number;
       commission_count: number;
     }> = {};
@@ -120,22 +156,31 @@ export async function GET(request: NextRequest) {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+    const defaultStats = () => ({
+      total_orders: 0,
+      total_sales: 0,
+      total_commission: 0,
+      last_order_date: null as string | null,
+      delivered_count_30d: 0,
+      pending_amount: 0,
+      pending_count: 0,
+      payable_now_amount: 0,
+      payable_now_count: 0,
+      in_batch_amount: 0,
+      in_batch_count: 0,
+      paid_amount: 0,
+      paid_count: 0,
+      void_count: 0,
+      commission_count: 0,
+    });
+
     for (const o of orders || []) {
       const ao = o as any;
       const aid = String(ao.affiliate_id || '');
       if (!aid) continue;
       
       if (!statsById[aid]) {
-        statsById[aid] = {
-          total_orders: 0,
-          total_sales: 0,
-          total_commission: 0,
-          last_order_date: null,
-          delivered_count_30d: 0,
-          payable_amount: 0,
-          void_count: 0,
-          commission_count: 0,
-        };
+        statsById[aid] = defaultStats();
       }
       
       statsById[aid].total_orders += 1;
@@ -158,46 +203,66 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Add payable amounts
-    for (const pc of payableCommissions || []) {
-      const aid = String((pc as any).affiliate_id || '');
-      if (!aid) continue;
-      if (!statsById[aid]) {
-        statsById[aid] = {
-          total_orders: 0,
-          total_sales: 0,
-          total_commission: 0,
-          last_order_date: null,
-          delivered_count_30d: 0,
-          payable_amount: 0,
-          void_count: 0,
-          commission_count: 0,
-        };
-      }
-      statsById[aid].payable_amount += Number((pc as any).commission_amount || 0);
-    }
-
-    // Calculate void rates from all commissions
-    for (const c of allCommissions || []) {
+    // ============================================================================
+    // COMMISSION BREAKDOWN CALCULATION
+    // Using canonical eligibility rule: status='payable' OR (status='pending' AND payable_at <= NOW())
+    // ============================================================================
+    const now = new Date();
+    
+    for (const c of allAffiliateCommissions || []) {
       const ac = c as any;
       const aid = String(ac.affiliate_id || '');
       if (!aid) continue;
+      
       if (!statsById[aid]) {
-        statsById[aid] = {
-          total_orders: 0,
-          total_sales: 0,
-          total_commission: 0,
-          last_order_date: null,
-          delivered_count_30d: 0,
-          payable_amount: 0,
-          void_count: 0,
-          commission_count: 0,
-        };
+        statsById[aid] = defaultStats();
       }
-      statsById[aid].commission_count += 1;
-      if (ac.status === 'void') {
+      
+      const amount = Number(ac.commission_amount || 0);
+      const status = ac.status;
+      const payableAt = ac.payable_at ? new Date(ac.payable_at) : null;
+      const batchId = ac.payout_batch_id;
+      const batchStatus = batchId ? batchStatusMap[batchId] : null;
+      
+      // Check if eligible using canonical rule
+      const isEligible = status === 'payable' || (status === 'pending' && payableAt && payableAt <= now);
+      
+      if (status === 'paid') {
+        // Paid commissions
+        statsById[aid].paid_amount += amount;
+        statsById[aid].paid_count += 1;
+      } else if (status === 'void') {
+        // Void - just count for void rate
         statsById[aid].void_count += 1;
+      } else if (isEligible) {
+        if (batchId && batchStatus !== 'paid') {
+          // Eligible but in a pending/unpaid batch
+          statsById[aid].in_batch_amount += amount;
+          statsById[aid].in_batch_count += 1;
+        } else if (!batchId) {
+          // Eligible and not in any batch = Payable Now
+          statsById[aid].payable_now_amount += amount;
+          statsById[aid].payable_now_count += 1;
+        }
+        // If batchStatus === 'paid', it should have status='paid' already, but just in case
+      } else if (status === 'pending' && payableAt && payableAt > now) {
+        // Pending - not yet eligible (still in return window)
+        statsById[aid].pending_amount += amount;
+        statsById[aid].pending_count += 1;
       }
+      
+      // Count for void rate calculation (all non-void commissions)
+      if (status !== 'void') {
+        statsById[aid].commission_count += 1;
+      }
+    }
+
+    // Calculate void rates from last 30 days commissions (for backward compat)
+    for (const c of allCommissions || []) {
+      const ac = c as any;
+      const aid = String(ac.affiliate_id || '');
+      if (!aid || !statsById[aid]) continue;
+      // void_count already calculated above, this is just for 30-day window if needed
     }
 
     // Calculate tier for each affiliate
@@ -214,16 +279,7 @@ export async function GET(request: NextRequest) {
 
     // Build enriched affiliates list
     let enrichedAffiliates = (affiliates || []).map((a: any) => {
-      const stats = statsById[a.id] || {
-        total_orders: 0,
-        total_sales: 0,
-        total_commission: 0,
-        last_order_date: null,
-        delivered_count_30d: 0,
-        payable_amount: 0,
-        void_count: 0,
-        commission_count: 0,
-      };
+      const stats = statsById[a.id] || defaultStats();
       
       // Calculate void rate (percentage of voided commissions)
       const voidRate = stats.commission_count > 0 
@@ -269,7 +325,17 @@ export async function GET(request: NextRequest) {
           total_commission: stats.total_commission,
           last_order_date: stats.last_order_date,
           delivered_count_30d: stats.delivered_count_30d,
-          payable_amount: stats.payable_amount,
+          // Commission breakdown (new)
+          pending_amount: stats.pending_amount,
+          pending_count: stats.pending_count,
+          payable_now_amount: stats.payable_now_amount,
+          payable_now_count: stats.payable_now_count,
+          in_batch_amount: stats.in_batch_amount,
+          in_batch_count: stats.in_batch_count,
+          paid_amount: stats.paid_amount,
+          paid_count: stats.paid_count,
+          // Legacy (backward compat)
+          payable_amount: stats.payable_now_amount, // Alias for backward compat
           void_count: stats.void_count,
           void_rate: voidRate,
           commission_count_30d: stats.commission_count,

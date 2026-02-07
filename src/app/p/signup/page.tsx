@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -16,7 +16,7 @@ export default function ParlourSignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [provinces, setProvinces] = useState<Province[]>([]);
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = supabaseBrowser;
 
   // Form fields
   const [parlourName, setParlourName] = useState('');

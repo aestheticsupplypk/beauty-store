@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -67,7 +67,7 @@ type ShippingRule = {
 
 export default function ParlourOrderPage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = supabaseBrowser;
 
   const [loading, setLoading] = useState(true);
   const [parlour, setParlour] = useState<Parlour | null>(null);
@@ -385,6 +385,7 @@ export default function ParlourOrderPage() {
       const response = await fetch('/api/parlour/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           items: cart.map((c) => ({
             variant_id: c.variant_id,

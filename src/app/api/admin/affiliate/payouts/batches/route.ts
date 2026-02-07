@@ -78,13 +78,36 @@ export async function POST(req: Request) {
       return false;
     });
 
-    if (commissions.length === 0) {
-      return NextResponse.json({ error: 'No payable commissions found' }, { status: 400 });
+    // ============================================================================
+    // COMMISSION ADJUSTMENTS:
+    // Include unpaid adjustments in batch (can be negative for clawbacks)
+    // ============================================================================
+    const { data: adjustmentsData, error: adjErr } = await supabase
+      .from('commission_adjustments')
+      .select('id, affiliate_id, amount')
+      .is('payout_batch_id', null)
+      .is('paid_at', null);
+
+    if (adjErr) {
+      console.error('[payouts/batches] adjustments fetch error', adjErr.message);
+    }
+
+    const adjustments = (adjustmentsData || []) as any[];
+
+    // Allow batch creation if there are commissions OR adjustments
+    if (commissions.length === 0 && adjustments.length === 0) {
+      return NextResponse.json({ error: 'No payable commissions or adjustments found' }, { status: 400 });
     }
 
     // Calculate totals
-    const totalAmount = commissions.reduce((s, c) => s + Number(c.commission_amount || 0), 0);
-    const uniqueAffiliates = new Set(commissions.map(c => c.affiliate_id));
+    const totalCommissionAmount = commissions.reduce((s, c) => s + Number(c.commission_amount || 0), 0);
+    const totalAdjustmentAmount = adjustments.reduce((s, a) => s + Number(a.amount || 0), 0);
+    const totalAmount = totalCommissionAmount + totalAdjustmentAmount;
+    
+    const uniqueAffiliates = new Set([
+      ...commissions.map(c => c.affiliate_id),
+      ...adjustments.map(a => a.affiliate_id)
+    ]);
     const totalAffiliates = uniqueAffiliates.size;
 
     // Calculate period (earliest to latest payable_at)
@@ -144,6 +167,23 @@ export async function POST(req: Request) {
     
     console.log('[payouts/batches] Updated', updateData?.length || 0, 'commissions');
 
+    // Step 4: Assign adjustments to this batch
+    if (adjustments.length > 0) {
+      const adjustmentIds = adjustments.map(a => a.id);
+      console.log('[payouts/batches] Assigning', adjustmentIds.length, 'adjustments to batch', batchId);
+      
+      const { error: adjUpdateErr } = await supabase
+        .from('commission_adjustments')
+        .update({ payout_batch_id: batchId })
+        .in('id', adjustmentIds)
+        .is('payout_batch_id', null);
+
+      if (adjUpdateErr) {
+        console.error('[payouts/batches] adjustment update error', adjUpdateErr.message);
+        // Don't fail the batch - adjustments are secondary
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       batch: {
@@ -151,9 +191,12 @@ export async function POST(req: Request) {
         batch_date: (batch as any).batch_date,
         period_start: (batch as any).period_start,
         period_end: (batch as any).period_end,
-        total_commissions: totalAmount,
+        total_commissions: totalCommissionAmount,
+        total_adjustments: totalAdjustmentAmount,
+        net_total: totalAmount,
         total_affiliates: totalAffiliates,
         commission_count: commissions.length,
+        adjustment_count: adjustments.length,
         status: 'pending',
       },
     });

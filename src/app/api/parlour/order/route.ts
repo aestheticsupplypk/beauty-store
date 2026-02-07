@@ -1,26 +1,43 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 
 export async function POST(req: Request) {
   try {
-    // Get session using route handler client (correct for API routes)
+    // Create supabase client with explicit cookie handling for API route
     const cookieStore = cookies();
-    const supabaseAuth = createRouteHandlerClient({ cookies: () => cookieStore });
-    const { data: { session } } = await supabaseAuth.auth.getSession();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: (cookiesToSet) => {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options);
+              });
+            } catch {
+              // Ignore - can fail in read-only context
+            }
+          },
+        },
+      }
+    );
+    
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!session?.user) {
+    if (authError || !user) {
+      console.log('[parlour/order] Auth error:', authError?.message || 'No user');
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-
-    const supabase = getSupabaseServerClient();
 
     // Get user's parlour
     const { data: profile } = await supabase
       .from('profiles')
       .select('parlour_id')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .maybeSingle();
 
     if (!profile?.parlour_id) {

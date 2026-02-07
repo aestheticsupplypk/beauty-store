@@ -33,9 +33,30 @@ export async function GET() {
       return false;
     });
     
-    const totalPayable = eligibleRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    const totalCommissions = eligibleRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0);
     const uniqueAffiliates = new Set(eligibleRows.map(r => r.affiliate_id));
     const affiliatesPayable = uniqueAffiliates.size;
+
+    // ============================================================================
+    // COMMISSION ADJUSTMENTS:
+    // Net payable = payable commissions + unpaid adjustments (can be negative for clawbacks)
+    // ============================================================================
+    const { data: adjustmentsData, error: adjErr } = await supabase
+      .from('commission_adjustments')
+      .select('amount, affiliate_id')
+      .is('payout_batch_id', null)
+      .is('paid_at', null);
+
+    if (adjErr) {
+      console.error('[payouts/summary] adjustments query error', adjErr.message);
+    }
+
+    const totalAdjustments = ((adjustmentsData || []) as any[]).reduce((s, r) => s + Number(r.amount || 0), 0);
+    const totalPayable = totalCommissions + totalAdjustments;
+    
+    // Add affiliates with adjustments to the count
+    const adjustmentAffiliates = new Set(((adjustmentsData || []) as any[]).map(r => r.affiliate_id));
+    adjustmentAffiliates.forEach(id => uniqueAffiliates.add(id));
 
     // Get last completed batch
     const { data: lastBatch, error: batchErr } = await supabase
@@ -72,8 +93,10 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       summary: {
+        total_commissions: totalCommissions,
+        total_adjustments: totalAdjustments,
         total_payable: totalPayable,
-        affiliates_payable: affiliatesPayable,
+        affiliates_payable: uniqueAffiliates.size,
         next_payout_date: nextPayoutDate.toISOString().split('T')[0],
       },
       last_batch: lastBatch ? {

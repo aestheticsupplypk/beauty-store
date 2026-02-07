@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -22,7 +22,7 @@ type Parlour = {
 
 export default function ParlourProfilePage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = supabaseBrowser;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

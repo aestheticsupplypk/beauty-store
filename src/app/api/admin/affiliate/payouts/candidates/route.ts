@@ -53,11 +53,45 @@ export async function GET() {
       return false;
     });
 
+    // ============================================================================
+    // COMMISSION ADJUSTMENTS:
+    // Include unpaid adjustments in candidate totals (can be negative for clawbacks)
+    // ============================================================================
+    const { data: adjustmentsData, error: adjErr } = await supabase
+      .from('commission_adjustments')
+      .select(`
+        id,
+        affiliate_id,
+        amount,
+        reason,
+        created_at,
+        affiliates!inner (
+          id,
+          name,
+          code,
+          email,
+          payout_method,
+          easypaisa_number,
+          bank_name,
+          bank_account_number
+        )
+      `)
+      .is('payout_batch_id', null)
+      .is('paid_at', null);
+
+    if (adjErr) {
+      console.error('[payouts/candidates] adjustments query error', adjErr.message);
+    }
+
+    const adjustments = (adjustmentsData || []) as any[];
+
     // Group by affiliate
     const affiliateMap = new Map<string, {
       affiliate: any;
       commissions: any[];
-      total_amount: number;
+      adjustments: any[];
+      commission_total: number;
+      adjustment_total: number;
     }>();
 
     for (const c of rows) {
@@ -66,7 +100,9 @@ export async function GET() {
         affiliateMap.set(affId, {
           affiliate: c.affiliates,
           commissions: [],
-          total_amount: 0,
+          adjustments: [],
+          commission_total: 0,
+          adjustment_total: 0,
         });
       }
       const entry = affiliateMap.get(affId)!;
@@ -76,7 +112,29 @@ export async function GET() {
         commission_amount: Number(c.commission_amount || 0),
         payable_at: c.payable_at,
       });
-      entry.total_amount += Number(c.commission_amount || 0);
+      entry.commission_total += Number(c.commission_amount || 0);
+    }
+
+    // Add adjustments to affiliate map
+    for (const adj of adjustments) {
+      const affId = adj.affiliate_id;
+      if (!affiliateMap.has(affId)) {
+        affiliateMap.set(affId, {
+          affiliate: adj.affiliates,
+          commissions: [],
+          adjustments: [],
+          commission_total: 0,
+          adjustment_total: 0,
+        });
+      }
+      const entry = affiliateMap.get(affId)!;
+      entry.adjustments.push({
+        id: adj.id,
+        amount: Number(adj.amount || 0),
+        reason: adj.reason,
+        created_at: adj.created_at,
+      });
+      entry.adjustment_total += Number(adj.amount || 0);
     }
 
     // Convert to array
@@ -92,23 +150,31 @@ export async function GET() {
         ? `${data.affiliate.bank_name} - ${data.affiliate.bank_account_number}`
         : null,
       commission_count: data.commissions.length,
-      total_amount: data.total_amount,
+      commission_total: data.commission_total,
+      adjustment_count: data.adjustments.length,
+      adjustment_total: data.adjustment_total,
+      net_payable: data.commission_total + data.adjustment_total,
       commissions: data.commissions,
+      adjustments: data.adjustments,
     }));
 
-    // Sort by total amount descending
-    candidates.sort((a, b) => b.total_amount - a.total_amount);
+    // Sort by net payable descending
+    candidates.sort((a, b) => b.net_payable - a.net_payable);
 
     // Calculate totals
-    const totalAmount = candidates.reduce((s, c) => s + c.total_amount, 0);
-    const totalCommissions = rows.length;
+    const totalCommissionAmount = candidates.reduce((s, c) => s + c.commission_total, 0);
+    const totalAdjustmentAmount = candidates.reduce((s, c) => s + c.adjustment_total, 0);
+    const totalNetPayable = totalCommissionAmount + totalAdjustmentAmount;
 
     return NextResponse.json({
       ok: true,
       candidates,
       totals: {
-        total_amount: totalAmount,
-        total_commissions: totalCommissions,
+        total_commissions: rows.length,
+        total_commission_amount: totalCommissionAmount,
+        total_adjustments: adjustments.length,
+        total_adjustment_amount: totalAdjustmentAmount,
+        net_payable: totalNetPayable,
         total_affiliates: candidates.length,
       },
     });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { useRouter } from 'next/navigation';
 
 export default function ParlourLoginPage() {
@@ -16,7 +16,7 @@ export default function ParlourLoginPage() {
   const [forgotSuccess, setForgotSuccess] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = supabaseBrowser;
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();

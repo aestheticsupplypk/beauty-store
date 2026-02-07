@@ -232,6 +232,11 @@ return (
                   {(() => {
                     const src = (o as any).source || 'online';
                     const isAffiliate = !!(o as any).affiliate_id;
+                    const isParlour = src === 'parlour';
+                    
+                    if (isParlour) {
+                      return <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Parlour</span>;
+                    }
                     
                     if (isAffiliate) {
                       return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Affiliate</span>;

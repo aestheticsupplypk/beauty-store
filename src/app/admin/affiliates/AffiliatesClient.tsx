@@ -24,6 +24,16 @@ type Affiliate = {
     total_commission: number;
     last_order_date: string | null;
     delivered_count_30d: number;
+    // Commission breakdown
+    pending_amount: number;
+    pending_count: number;
+    payable_now_amount: number;
+    payable_now_count: number;
+    in_batch_amount: number;
+    in_batch_count: number;
+    paid_amount: number;
+    paid_count: number;
+    // Legacy
     payable_amount: number;
     void_count: number;
     void_rate: number;
@@ -312,7 +322,9 @@ export default function AffiliatesClient() {
                 <th className="py-2 px-3 text-right">Void Rate</th>
                 <th className="py-2 px-3 text-right">Sales (PKR)</th>
                 <th className="py-2 px-3 text-right">Commission</th>
+                <th className="py-2 px-3 text-right">Pending</th>
                 <th className="py-2 px-3 text-right">Payable</th>
+                <th className="py-2 px-3 text-right">In Batch</th>
                 <th className="py-2 px-3">Last Order</th>
                 <th className="py-2 px-3">Payout Ready</th>
               </tr>
@@ -320,7 +332,7 @@ export default function AffiliatesClient() {
             <tbody>
               {sortedAffiliates.length === 0 ? (
                 <tr>
-                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={14}>
+                  <td className="py-4 px-3 text-sm text-gray-500" colSpan={16}>
                     {hasActiveFilters ? 'No affiliates match your filters.' : 'No affiliates created yet.'}
                   </td>
                 </tr>
@@ -371,10 +383,30 @@ export default function AffiliatesClient() {
                     <td className="py-2 px-3 text-right">{Number(a.stats.total_sales || 0).toLocaleString()}</td>
                     <td className="py-2 px-3 text-right">{Number(a.stats.total_commission || 0).toLocaleString()}</td>
                     <td className="py-2 px-3 text-right">
-                      {a.stats.payable_amount > 0 ? (
-                        <span className="text-emerald-600 font-medium">{a.stats.payable_amount.toLocaleString()}</span>
+                      {(a.stats.pending_amount || 0) > 0 ? (
+                        <span className="text-gray-500" title={`${a.stats.pending_count || 0} commission(s) in return window`}>
+                          {a.stats.pending_amount.toLocaleString()}
+                        </span>
                       ) : (
-                        <span className="text-gray-400">0</span>
+                        <span className="text-gray-300">0</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {(a.stats.payable_now_amount || 0) > 0 ? (
+                        <span className="text-emerald-600 font-medium" title={`${a.stats.payable_now_count || 0} commission(s) ready for payout`}>
+                          {a.stats.payable_now_amount.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">0</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {(a.stats.in_batch_amount || 0) > 0 ? (
+                        <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700" title={`${a.stats.in_batch_count || 0} commission(s) queued in pending batch`}>
+                          {a.stats.in_batch_amount.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
                       )}
                     </td>
                     <td className="py-2 px-3 whitespace-nowrap text-xs text-gray-500">
