@@ -303,6 +303,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: linesErr.message }, { status: 400 });
     }
 
+    // 6) Reserve inventory for pending order
+    // This ensures stock is held while order is pending/packed
+    for (const it of items) {
+      const { data: currentInv } = await supabase
+        .from('inventory')
+        .select('reserved')
+        .eq('variant_id', it.variant_id)
+        .maybeSingle();
+      
+      const currentReserved = Number(currentInv?.reserved ?? 0);
+      const { error: invErr } = await supabase
+        .from('inventory')
+        .update({ reserved: currentReserved + it.qty })
+        .eq('variant_id', it.variant_id);
+      
+      if (invErr) {
+        console.error('[orders/create] inventory reserve error', it.variant_id, invErr.message);
+      }
+    }
+
     // Try to send an email notification (non-blocking)
     try {
       const RESEND_API_KEY = process.env.RESEND_API_KEY;

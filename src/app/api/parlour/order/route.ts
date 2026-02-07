@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import { cookies } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(req: Request) {
   try {
-    // Get session
+    // Get session using route handler client (correct for API routes)
     const cookieStore = cookies();
-    const supabaseAuth = createServerComponentClient({ cookies: () => cookieStore });
+    const supabaseAuth = createRouteHandlerClient({ cookies: () => cookieStore });
     const { data: { session } } = await supabaseAuth.auth.getSession();
 
     if (!session?.user) {
