@@ -122,21 +122,27 @@ export async function POST(req: Request) {
     // This freezes the set at batch creation time (accounting safety)
     const commissionIds = commissions.map(c => c.id);
     
-    const { error: updateErr } = await supabase
+    console.log('[payouts/batches] Assigning', commissionIds.length, 'commissions to batch', batchId);
+    
+    // Only update payout_batch_id - don't change status to avoid trigger conflicts
+    // The canonical eligibility rule treats pending+payable_at<=now as effectively payable
+    const { data: updateData, error: updateErr } = await supabase
       .from('affiliate_commissions')
       .update({ 
-        payout_batch_id: batchId,
-        status: 'payable' // Promote pending->payable at batch time
+        payout_batch_id: batchId
       })
       .in('id', commissionIds)
-      .is('payout_batch_id', null); // Safety check
+      .is('payout_batch_id', null) // Safety check
+      .select('id');
 
     if (updateErr) {
-      console.error('[payouts/batches] update error', updateErr.message);
+      console.error('[payouts/batches] update error', updateErr.message, updateErr);
       // Try to clean up the batch
       await supabase.from('affiliate_payout_batches').delete().eq('id', batchId);
-      return NextResponse.json({ error: 'Failed to assign commissions to batch' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to assign commissions to batch: ' + updateErr.message }, { status: 500 });
     }
+    
+    console.log('[payouts/batches] Updated', updateData?.length || 0, 'commissions');
 
     return NextResponse.json({
       ok: true,

@@ -526,9 +526,13 @@ async function updateStatusAction(formData: FormData) {
   'use server';
   const id = String(formData.get('id') || '');
   const status = String(formData.get('status') || '');
+  
+  console.log('[updateStatusAction] Called with id:', id, 'status:', status);
+  
   await requireSectionAccess('orders');
 
   if (!id || !status) {
+    console.log('[updateStatusAction] Missing id or status');
     return { ok: false, message: 'Missing id or status' } as const;
   }
 
@@ -567,11 +571,22 @@ async function updateStatusAction(formData: FormData) {
     updateData.delivery_status = 'delivered';
   }
   
-  const { error: updErr } = await supabase
+  console.log('[updateStatusAction] Updating order', id, 'from', fromStatus, 'to', status, 'data:', updateData);
+  
+  const { data: updData, error: updErr } = await supabase
     .from('orders')
     .update(updateData)
-    .eq('id', id);
+    .eq('id', id)
+    .select('id, status');
+    
+  console.log('[updateStatusAction] Update result:', updData, 'error:', updErr);
+  
   if (updErr) return { ok: false, message: updErr.message } as const;
+  
+  if (!updData || updData.length === 0) {
+    console.log('[updateStatusAction] No rows updated - possible RLS issue');
+    return { ok: false, message: 'Update failed - no rows affected (check RLS policies)' } as const;
+  }
 
   // Compute inventory adjustments based on transition
   // Rules:
