@@ -83,6 +83,8 @@ export default function AffiliateDashboardPage() {
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [kpiPeriod, setKpiPeriod] = useState<'all' | 'month' | 'last_month'>('all');
+  const [promoLang, setPromoLang] = useState<'en' | 'ur'>('en');
+  const [copiedPromo, setCopiedPromo] = useState(false);
 
   const getWhatsAppMessage = (code: string) => {
     return `Hi! I'm sharing my personal referral code for Aesthetic PK — Pakistan's trusted beauty supplier for salons and professionals.\n\nUse code: ${code}\n\nYou'll get 10% OFF your first order.\n\nShop here: https://aestheticpk.com\n\nLet me know if you need help choosing products!`;
@@ -90,6 +92,13 @@ export default function AffiliateDashboardPage() {
 
   const getInstagramBio = (code: string) => {
     return `Shop professional beauty products\nUse code ${code} for 10% off\naestheticpk.com`;
+  };
+
+  const getPromoMessage = (code: string, link: string, lang: 'en' | 'ur') => {
+    if (lang === 'ur') {
+      return `Fake/low-quality products se tang? AestheticPK par original salon products milte hain aur COD available hai.\nMera code ${code} use karein aur discount lein ✅\nOrder: ${link}`;
+    }
+    return `Tired of fake/low-quality products? AestheticPK has original salon products with COD available.\nUse my code ${code} to get a discount ✅\nOrder here: ${link}`;
   };
 
   const loadForCurrentUser = async (opts?: { fromLogin?: boolean }) => {
@@ -692,6 +701,71 @@ export default function AffiliateDashboardPage() {
                     className="w-20 h-20 rounded border border-gray-200"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Promo Messages Card */}
+            <div className="rounded-md border border-purple-200 bg-purple-50/50 px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-medium text-purple-800 text-base">📋 Copy a Promo Message</div>
+                <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-purple-200">
+                  <button
+                    onClick={() => setPromoLang('en')}
+                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${promoLang === 'en' ? 'bg-purple-600 text-white' : 'text-purple-600 hover:bg-purple-100'}`}
+                  >
+                    EN
+                  </button>
+                  <button
+                    onClick={() => setPromoLang('ur')}
+                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${promoLang === 'ur' ? 'bg-purple-600 text-white' : 'text-purple-600 hover:bg-purple-100'}`}
+                  >
+                    اردو
+                  </button>
+                </div>
+              </div>
+              <div className="bg-white border border-purple-200 rounded p-3 text-sm text-gray-700 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                {getPromoMessage(data.affiliate.code, `https://aestheticpk.com/r/${data.affiliate.code}`, promoLang)}
+              </div>
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(getPromoMessage(data.affiliate.code, `https://aestheticpk.com/r/${data.affiliate.code}`, promoLang));
+                      setCopiedPromo(true);
+                      setTimeout(() => setCopiedPromo(false), 2000);
+                    } catch {}
+                  }}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
+                >
+                  {copiedPromo ? '✓ Copied!' : '📋 Copy Message'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(`https://aestheticpk.com/r/${data.affiliate.code}`);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    } catch {}
+                  }}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-lg border border-purple-300 bg-white px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 transition-colors"
+                >
+                  {copiedLink ? '✓ Copied!' : '🔗 Copy Link'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(data.affiliate.code);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    } catch {}
+                  }}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-lg border border-purple-300 bg-white px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 transition-colors"
+                >
+                  {copied ? '✓ Copied!' : '🏷️ Copy Code'}
+                </button>
               </div>
             </div>
           </div>
