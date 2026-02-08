@@ -16,6 +16,7 @@ type AffiliateSummary = {
     strike_count: number;
     commission_rate: number;
     payout_method?: string | null;
+    payout_ready?: boolean;
     phone?: string | null;
   };
   stats: {
@@ -25,6 +26,8 @@ type AffiliateSummary = {
     total_commission: number;
     pending_commission: number;
     payable_commission: number;
+    in_batch_commission?: number;
+    payable_now_commission?: number;
     paid_commission?: number;
     void_commission?: number;
     next_payable_date?: string | null;
@@ -35,6 +38,13 @@ type AffiliateSummary = {
     next_tier_name: string | null;
     next_tier_threshold: number | null;
   };
+  payout_history?: Array<{
+    id: string;
+    paid_at: string;
+    amount: number;
+    method: string;
+    status: string;
+  }>;
   orders: Array<{
     id: string;
     created_at: string;
@@ -411,18 +421,18 @@ export default function AffiliateDashboardPage() {
             pageTitle="Affiliate Dashboard"
           />
           
-          {/* Payout Info Incomplete Warning */}
-          {(!data.affiliate.payout_method || !data.affiliate.phone) && (
+          {/* Payout Setup Incomplete Warning */}
+          {!data.affiliate.payout_ready && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-amber-500 shrink-0">⚠️</span>
-                <span className="text-xs md:text-sm font-medium text-amber-800 truncate">Payout incomplete</span>
+                <span className="text-xs md:text-sm font-medium text-amber-800">Payout setup incomplete — add payout method to receive commissions</span>
               </div>
               <Link
                 href="/affiliate/settings"
-                className="text-xs font-medium text-amber-700 hover:text-amber-900 whitespace-nowrap"
+                className="shrink-0 px-3 py-1 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded"
               >
-                Fix now →
+                Setup →
               </Link>
             </div>
           )}
@@ -755,13 +765,26 @@ export default function AffiliateDashboardPage() {
             <div className="border rounded p-2 md:p-3 bg-white border-emerald-200 bg-emerald-50/30">
               <div className="text-[10px] md:text-xs uppercase text-emerald-700 flex items-center gap-1">
                 Payable
-                <span className="text-emerald-500 cursor-help" title="Ready for payout - will be included in next month's payment">ⓘ</span>
+                <span className="text-emerald-500 cursor-help" title="Ready for payout after the return window (includes amounts already queued)">ⓘ</span>
               </div>
               <div className="text-lg md:text-xl font-semibold text-emerald-700">
                 {Number(data.stats.payable_commission || 0).toLocaleString()}
               </div>
               <div className="text-[10px] md:text-xs text-emerald-600">Next payout</div>
             </div>
+            {/* Queued/In Batch card - only show if there are batched commissions */}
+            {(data.stats.in_batch_commission || 0) > 0 && (
+              <div className="border rounded p-2 md:p-3 bg-white border-blue-200 bg-blue-50/30">
+                <div className="text-[10px] md:text-xs uppercase text-blue-700 flex items-center gap-1">
+                  Queued
+                  <span className="text-blue-500 cursor-help" title="Already included in an upcoming payout batch">ⓘ</span>
+                </div>
+                <div className="text-lg md:text-xl font-semibold text-blue-700">
+                  {Number(data.stats.in_batch_commission || 0).toLocaleString()}
+                </div>
+                <div className="text-[10px] md:text-xs text-blue-600">In batch</div>
+              </div>
+            )}
             {/* Void card - only show if there are voided commissions */}
             {(data.stats.void_commission || 0) > 0 && (
               <div className="border rounded p-2 md:p-3 bg-gray-50 border-gray-200">
@@ -794,7 +817,8 @@ export default function AffiliateDashboardPage() {
               <p><strong>Orders:</strong> Total orders placed using your code (includes cancelled).</p>
               <p><strong>Earned:</strong> Total commission from active (non-cancelled) orders.</p>
               <p><strong>Pending:</strong> Commission from recent deliveries (10-day hold for returns).</p>
-              <p><strong>Payable:</strong> Ready for payout — included in next month's payment.</p>
+              <p><strong>Payable:</strong> Ready for payout after the return window (includes amounts already queued).</p>
+              <p><strong>Queued:</strong> Already included in an upcoming payout batch — will be paid soon.</p>
               <p><strong>Void:</strong> Commission removed due to cancelled/returned orders.</p>
             </div>
           )}
@@ -897,6 +921,41 @@ export default function AffiliateDashboardPage() {
                 )}
                 <p><strong>Strike count:</strong> {data.affiliate.strike_count}/5</p>
                 <p className="text-emerald-600 pt-1">Your commission increases as you deliver more orders.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Payout History (last 5 payouts) */}
+          {data.payout_history && data.payout_history.length > 0 && (
+            <div className="border rounded p-3 md:p-4 bg-white">
+              <h2 className="font-medium text-sm md:text-base mb-2 md:mb-3">Payout History</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs md:text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b">
+                      <th className="pb-2 pr-2">Date</th>
+                      <th className="pb-2 pr-2">Amount</th>
+                      <th className="pb-2 pr-2">Method</th>
+                      <th className="pb-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.payout_history.map((p) => (
+                      <tr key={p.id} className="border-b last:border-0">
+                        <td className="py-2 pr-2 whitespace-nowrap">
+                          {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </td>
+                        <td className="py-2 pr-2 font-medium">{Number(p.amount).toLocaleString()} PKR</td>
+                        <td className="py-2 pr-2 capitalize">{p.method === 'easypaisa' ? 'EasyPaisa' : p.method === 'bank_transfer' ? 'Bank' : p.method}</td>
+                        <td className="py-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] ${p.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {p.status === 'paid' ? 'Paid' : 'Processing'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

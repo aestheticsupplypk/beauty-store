@@ -25,7 +25,7 @@ export async function GET() {
 
     const { data: affiliate, error: affErr } = await supabase
       .from('affiliates')
-      .select('id, name, parlour_name, city, code, active, email, status, strike_count, commission_rate')
+      .select('id, name, parlour_name, city, code, active, email, status, strike_count, commission_rate, payout_method, easypaisa_number, bank_account_number, bank_iban')
       .ilike('email', email)
       .maybeSingle();
 
@@ -62,6 +62,7 @@ export async function GET() {
         commission_amount,
         status,
         payable_at,
+        payout_batch_id,
         void_reason,
         created_at,
         orders!inner (
@@ -79,6 +80,25 @@ export async function GET() {
       .eq('affiliate_id', affiliateId)
       .order('created_at', { ascending: false })
       .limit(100);
+    
+    // Fetch batch statuses for commissions that have a batch (to check if batch is pending/processing)
+    const batchIds = Array.from(new Set(
+      ((commissions || []) as any[])
+        .map(c => c.payout_batch_id)
+        .filter(Boolean)
+    ));
+    
+    let batchStatusMap: Record<string, string> = {};
+    if (batchIds.length > 0) {
+      const { data: batches } = await supabase
+        .from('affiliate_payout_batches')
+        .select('id, status')
+        .in('id', batchIds);
+      
+      for (const b of (batches || []) as any[]) {
+        batchStatusMap[b.id] = b.status;
+      }
+    }
 
     if (commissionsErr) {
       console.error('[affiliate/me] commissions error', commissionsErr.message);
@@ -111,10 +131,26 @@ export async function GET() {
       .filter(r => r.status === 'pending' && (!r.payable_at || new Date(r.payable_at) > now))
       .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
     
-    // Payable = status payable OR (status pending AND payable_at <= now)
-    const payableCommission = rows
-      .filter(r => r.status === 'payable' || (r.status === 'pending' && r.payable_at && new Date(r.payable_at) <= now))
+    // Payable (Total) = status payable OR (status pending AND payable_at <= now)
+    // This is the canonical eligibility - includes both batched and unbatched
+    const eligibleRows = rows.filter(r => 
+      r.status === 'payable' || (r.status === 'pending' && r.payable_at && new Date(r.payable_at) <= now)
+    );
+    const payableCommission = eligibleRows.reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    
+    // In Batch = eligible commissions already assigned to a pending/processing batch
+    const inBatchCommission = eligibleRows
+      .filter(r => {
+        const batchId = r.payout_batch_id;
+        if (!batchId) return false;
+        const batchStatus = batchStatusMap[batchId];
+        // Include if batch exists and is not yet paid
+        return batchStatus && batchStatus !== 'paid';
+      })
       .reduce((s, r) => s + Number(r.commission_amount || 0), 0);
+    
+    // Payable Now = eligible but not in any batch (unbatched)
+    const payableNowCommission = payableCommission - inBatchCommission;
     
     const paidCommission = rows
       .filter(r => r.status === 'paid')
@@ -161,6 +197,37 @@ export async function GET() {
       console.error('[affiliate/me] tier lookup error', tierErr);
     }
 
+    // Calculate payout_ready status
+    const payoutMethod = (affiliate as any).payout_method;
+    let payoutReady = false;
+    if (payoutMethod === 'easypaisa') {
+      payoutReady = Boolean((affiliate as any).easypaisa_number);
+    } else if (payoutMethod === 'bank_transfer') {
+      payoutReady = Boolean((affiliate as any).bank_account_number || (affiliate as any).bank_iban);
+    }
+
+    // Fetch payout history (last 5 paid batches for this affiliate)
+    let payoutHistory: Array<{ id: string; paid_at: string; amount: number; method: string; status: string }> = [];
+    try {
+      const { data: batches } = await supabase
+        .from('affiliate_payout_batches')
+        .select('id, status, paid_at, payout_method, total_amount')
+        .eq('affiliate_id', affiliateId)
+        .in('status', ['paid', 'processing'])
+        .order('paid_at', { ascending: false })
+        .limit(5);
+      
+      payoutHistory = ((batches || []) as any[]).map(b => ({
+        id: b.id,
+        paid_at: b.paid_at || '',
+        amount: Number(b.total_amount || 0),
+        method: b.payout_method || 'unknown',
+        status: b.status,
+      }));
+    } catch (phErr) {
+      console.error('[affiliate/me] payout history error', phErr);
+    }
+
     return NextResponse.json({
       ok: true,
       affiliate: {
@@ -172,6 +239,8 @@ export async function GET() {
         status: affiliateStatus,
         strike_count: (affiliate as any).strike_count || 0,
         commission_rate: (affiliate as any).commission_rate || 0.10,
+        payout_method: payoutMethod || null,
+        payout_ready: payoutReady,
       },
       stats: {
         total_orders: totalOrders,
@@ -180,11 +249,14 @@ export async function GET() {
         total_commission: totalCommission,
         pending_commission: pendingCommission,
         payable_commission: payableCommission,
+        in_batch_commission: inBatchCommission,
+        payable_now_commission: payableNowCommission,
         paid_commission: paidCommission,
         void_commission: voidCommission,
         next_payable_date: nextPayableDate,
       },
       tier: tierInfo,
+      payout_history: payoutHistory,
       orders: rows.map((r) => {
         const o = r.orders;
         // Show both order status and commission status

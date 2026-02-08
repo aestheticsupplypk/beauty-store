@@ -3,12 +3,14 @@ import { getSupabaseServerClient } from '@/lib/supabaseServer';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import OrderPaymentsForm from './OrderPaymentsForm';
+import StatusForm from './StatusForm';
+import CustomerEditForm from './CustomerEditForm';
 
 async function fetchOrder(id: string) {
   const supabase = getSupabaseServerClient();
   const { data: order, error } = await supabase
     .from('orders')
-    .select('id, status, customer_name, email, phone, address, city, province_code, created_at, shipped_at, delivered_at, delivery_status, shipping_amount, source, total_amount, grand_total, amount_paid, amount_due, affiliate_id, affiliate_ref_code, affiliate_commission_amount')
+    .select('id, status, customer_name, email, phone, alternate_phone, address, city, province_code, created_at, shipped_at, delivered_at, delivery_status, shipping_amount, source, total_amount, grand_total, amount_paid, amount_due, affiliate_id, affiliate_ref_code, affiliate_commission_amount, payment_mode, cod_due_amount, payment_preference')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -46,6 +48,9 @@ async function fetchOrder(id: string) {
     .eq('order_id', id)
     .order('received_at', { ascending: true });
 
+  // Check if COD payment already exists (for idempotency)
+  const hasCodPayment = (payments ?? []).some((p: any) => p.note === 'COD collected on delivery');
+
   // Fetch commission and check for delivered_date_override event
   let deliveredDateOverride: { actor: string; created_at: string; reason: string | null } | null = null;
   if (order.affiliate_id) {
@@ -75,7 +80,19 @@ async function fetchOrder(id: string) {
     }
   }
 
-  return { order, items: lines ?? [], total, subtotal, shipping, amount_paid, amount_due, payments: payments ?? [], deliveredDateOverride } as const;
+  // Determine order channel (matches canonical badge logic)
+  const src = String((order as any).source || 'website').toLowerCase();
+  const affiliateId = (order as any).affiliate_id;
+  let orderChannel: 'web' | 'parlour' | 'affiliate' | 'manual';
+  if (src === 'parlour') orderChannel = 'parlour';
+  else if (src === 'manual') orderChannel = 'manual';
+  else if (affiliateId) orderChannel = 'affiliate';
+  else orderChannel = 'web';
+
+  // Pricing edits allowed only for Web/Parlour + Pending status
+  const canEditPricing = (orderChannel === 'web' || orderChannel === 'parlour') && order.status === 'pending';
+
+  return { order, items: lines ?? [], total, subtotal, shipping, amount_paid, amount_due, payments: payments ?? [], deliveredDateOverride, hasCodPayment, orderChannel, canEditPricing } as const;
 }
 
 async function addPayment(formData: FormData) {
@@ -151,6 +168,35 @@ async function addPayment(formData: FormData) {
 
   revalidatePath(`/admin/orders/${id}`);
   revalidatePath('/admin/orders');
+}
+
+async function updateCustomerInfoAction(
+  orderId: string,
+  data: { customer_name: string; phone: string; alternate_phone: string; address: string; city: string }
+): Promise<{ ok: boolean; message?: string }> {
+  'use server';
+  await requireSectionAccess('orders');
+
+  const supabase = getSupabaseServerClient();
+
+  // Update customer info (allowed for all orders, any status)
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      customer_name: data.customer_name,
+      phone: data.phone,
+      alternate_phone: data.alternate_phone || null,
+      address: data.address,
+      city: data.city,
+    })
+    .eq('id', orderId);
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true };
 }
 
 async function returnLineAction(formData: FormData) {
@@ -251,7 +297,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     );
   }
 
-  const { order, items, total, subtotal, shipping, amount_paid, amount_due, payments, deliveredDateOverride } = result as any;
+  const { order, items, total, subtotal, shipping, amount_paid, amount_due, payments, deliveredDateOverride, hasCodPayment, orderChannel, canEditPricing } = result as any;
 
   const paymentStatus: string = (order as any).payment_status || (amount_due > 0 ? (amount_paid > 0 ? 'partial' : 'unpaid') : 'paid');
   const paymentBadge = (status: string) => {
@@ -339,18 +385,15 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             )}
           </div>
 
-          <div>
-            <h2 className="font-medium mb-2">Customer</h2>
-            <div className="text-sm">
-              <div className="font-medium">{order.customer_name}</div>
-              <div>{order.email || '-'}</div>
-              <div>{order.phone}</div>
-              <div>{order.address}</div>
-              <div>
-                {order.city} {order.province_code ? `(${order.province_code})` : ''}
-              </div>
-            </div>
-          </div>
+          <CustomerEditForm
+            orderId={String(order.id)}
+            customerName={order.customer_name}
+            phone={order.phone}
+            alternatePhone={(order as any).alternate_phone}
+            address={order.address}
+            city={order.city}
+            onSave={updateCustomerInfoAction.bind(null, String(order.id))}
+          />
 
           {order.affiliate_ref_code || order.affiliate_commission_amount ? (
             <div>
@@ -369,7 +412,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           ) : null}
 
           <div>
-            <h2 className="font-medium mb-2">Items</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-medium">Items</h2>
+              {!canEditPricing && (
+                <span className="text-xs text-gray-500">
+                  {orderChannel === 'affiliate' || orderChannel === 'manual' 
+                    ? `Items locked (${orderChannel} order)`
+                    : order.status !== 'pending'
+                    ? 'Items locked (set status to Pending to edit)'
+                    : ''}
+                </span>
+              )}
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
@@ -476,7 +530,16 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <div className="space-y-4">
           <div className="border rounded p-4 space-y-4">
             <h2 className="font-medium">Update Status</h2>
-            <StatusForm id={String(order.id)} currentStatus={String(order.status)} paymentPreference={(order as any).payment_preference} amountPaid={amount_paid} />
+            <StatusForm 
+              id={String(order.id)} 
+              currentStatus={String(order.status)} 
+              paymentMode={(order as any).payment_mode}
+              codDueAmount={(order as any).cod_due_amount}
+              amountDue={amount_due}
+              amountPaid={amount_paid}
+              hasCodPayment={hasCodPayment}
+              updateStatusAction={updateStatusAction}
+            />
 
             <div className="border-t pt-4">
               <h3 className="font-medium mb-2">Actions</h3>
@@ -498,6 +561,32 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
           <div className="border rounded p-4 space-y-3">
             <h2 className="font-medium">Payments</h2>
+            
+            {/* Payment Mode Display */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-600">Mode:</span>
+              {(() => {
+                const mode = (order as any).payment_mode || 'cod';
+                const modeLabels: Record<string, { label: string; color: string }> = {
+                  cod: { label: 'Cash on Delivery', color: 'bg-blue-100 text-blue-700' },
+                  prepaid: { label: 'Prepaid', color: 'bg-green-100 text-green-700' },
+                  installment: { label: 'Installment', color: 'bg-purple-100 text-purple-700' },
+                  split: { label: 'Split (Advance + COD)', color: 'bg-amber-100 text-amber-700' },
+                };
+                const { label, color } = modeLabels[mode] || modeLabels.cod;
+                return (
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>
+                    {label}
+                  </span>
+                );
+              })()}
+              {(order as any).payment_mode === 'split' && (order as any).cod_due_amount && (
+                <span className="text-xs text-gray-500">
+                  (COD: {Number((order as any).cod_due_amount).toLocaleString()} PKR)
+                </span>
+              )}
+            </div>
+            
             <div className="text-sm text-gray-700 space-y-1">
               <div className="flex justify-between">
                 <span>Total</span>
@@ -555,8 +644,12 @@ async function updateStatusAction(formData: FormData) {
   'use server';
   const id = String(formData.get('id') || '');
   const status = String(formData.get('status') || '');
+  const paymentMode = String(formData.get('payment_mode') || 'cod');
+  const expectedCodAmount = Number(formData.get('expected_cod_amount') || 0);
+  const codCollectedRaw = formData.get('cod_collected');
+  const codCollected = codCollectedRaw ? Number(codCollectedRaw) : null;
   
-  console.log('[updateStatusAction] Called with id:', id, 'status:', status);
+  console.log('[updateStatusAction] Called with id:', id, 'status:', status, 'paymentMode:', paymentMode);
   
   await requireSectionAccess('orders');
 
@@ -572,10 +665,10 @@ async function updateStatusAction(formData: FormData) {
 
   const supabase = getSupabaseServerClient();
 
-  // Fetch current status and items to compute inventory deltas
+  // Fetch current status and order details
   const { data: existing, error: fetchErr } = await supabase
     .from('orders')
-    .select('id, status')
+    .select('id, status, payment_mode, amount_paid, amount_due, grand_total')
     .eq('id', id)
     .maybeSingle();
   if (fetchErr) return { ok: false, message: fetchErr.message } as const;
@@ -598,6 +691,57 @@ async function updateStatusAction(formData: FormData) {
   if (status === 'delivered') {
     updateData.delivered_at = new Date().toISOString();
     updateData.delivery_status = 'delivered';
+  }
+  
+  // ============================================================================
+  // COD Payment Auto-Insert on Delivery (with idempotency guard)
+  // If marking as delivered and payment_mode is 'cod' or 'split', insert payment row
+  // Guard: Only insert if no existing "COD collected on delivery" payment exists
+  // ============================================================================
+  const isCodOrSplit = paymentMode === 'cod' || paymentMode === 'split';
+  const shouldInsertCodPayment = status === 'delivered' && isCodOrSplit && expectedCodAmount > 0;
+  
+  if (shouldInsertCodPayment) {
+    // Idempotency check: ensure no existing COD delivery payment
+    const { data: existingCodPayment } = await supabase
+      .from('order_payments')
+      .select('id')
+      .eq('order_id', id)
+      .eq('note', 'COD collected on delivery')
+      .maybeSingle();
+    
+    // Only insert if no existing COD payment found
+    if (!existingCodPayment) {
+      // Use collected amount if provided, otherwise use expected amount
+      const collectedAmount = (codCollected !== null && codCollected >= 0) ? codCollected : expectedCodAmount;
+      
+      if (collectedAmount > 0) {
+        // Insert payment row for COD collection
+        await supabase.from('order_payments').insert({
+          order_id: id,
+          amount: collectedAmount,
+          method: 'cash',
+          note: 'COD collected on delivery',
+        } as any);
+      
+        // Update order payment aggregates
+        const prevPaid = Number((existing as any)?.amount_paid || 0);
+        const grandTotal = Number((existing as any)?.grand_total || 0);
+        const newPaid = prevPaid + collectedAmount;
+        const newDue = Math.max(0, grandTotal - newPaid);
+        
+        let paymentStatus = 'unpaid';
+        if (newPaid <= 0) paymentStatus = 'unpaid';
+        else if (newDue <= 0) paymentStatus = 'paid';
+        else paymentStatus = 'partial';
+        
+        updateData.amount_paid = newPaid;
+        updateData.amount_due = newDue;
+        updateData.payment_status = paymentStatus;
+        
+        console.log('[updateStatusAction] COD payment inserted:', collectedAmount, 'newPaid:', newPaid, 'newDue:', newDue);
+      }
+    }
   }
   
   console.log('[updateStatusAction] Updating order', id, 'from', fromStatus, 'to', status, 'data:', updateData);
@@ -664,31 +808,6 @@ async function updateStatusAction(formData: FormData) {
   return { ok: true } as const;
 }
 
-function StatusForm({ id, currentStatus, paymentPreference, amountPaid }: { id: string; currentStatus: string; paymentPreference?: string; amountPaid?: number }) {
-  const showAdvanceWarning = paymentPreference === 'advance' && (amountPaid || 0) === 0;
-  
-  return (
-    <form action={updateStatusAction} className="space-y-3">
-      <input type="hidden" name="id" value={id} />
-      <div>
-        <label className="block text-sm">Status</label>
-        <select name="status" defaultValue={currentStatus} className="border rounded px-3 py-2 w-full">
-          <option value="pending">Pending</option>
-          <option value="packed">Packed</option>
-          <option value="shipped">Shipped</option>
-          <option value="delivered">Delivered</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </div>
-      {showAdvanceWarning && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded text-xs">
-          <span className="font-medium">Warning:</span> This order requires advance payment but no payment has been recorded yet.
-        </div>
-      )}
-      <button className="bg-black text-white rounded px-4 py-2">Save</button>
-    </form>
-  );
-}
 
 // ============================================================================
 // FULL ADMIN ONLY: Delivered Date Override
